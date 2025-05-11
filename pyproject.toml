@@ -1,6 +1,6 @@
 [project]
 name = "textdraw"
-version = "0.1.1"
+version = "0.1.2"
 description = "A small tool for drawing boxes and lines on the terminal"
 readme = "README.md"
 authors = [{ name = "Dene Hoffman", email = "denehoffman@me.com" }]
