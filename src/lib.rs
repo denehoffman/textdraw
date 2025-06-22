@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(dead_code)]
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Display,
     ops::{Add, AddAssign, Sub},
     str::FromStr,
@@ -182,7 +182,7 @@ impl From<BoundingBox> for (isize, isize, isize, isize) {
 #[pyclass(name = "Style")]
 #[derive(Default, Clone, Debug)]
 struct TextStyle {
-    effects: Vec<Effect>,
+    effects: HashSet<String>,
     fg: Option<color_art::Color>,
     bg: Option<color_art::Color>,
 }
@@ -195,20 +195,36 @@ impl TextStyle {
     fn __add__(&self, obj: Bound<PyAny>) -> PyResult<Self> {
         Ok(self.clone() + obj.try_into()?)
     }
-    fn __call__(&self, text: &str) -> String {
+    fn __call__(&self, text: &str) -> PyResult<String> {
         self.render(text)
     }
 }
 impl TextStyle {
-    fn render(&self, text: &str) -> String {
-        let mut style = Style::new().effects(&self.effects);
+    fn render(&self, text: &str) -> PyResult<String> {
+        let effects = self
+            .effects
+            .iter()
+            .map(|style| match style.as_str() {
+                "bold" => Ok(Effect::Bold),
+                "dimmed" => Ok(Effect::Dimmed),
+                "italic" => Ok(Effect::Italic),
+                "underline" => Ok(Effect::Underline),
+                "blink" => Ok(Effect::Blink),
+                "blinkfast" => Ok(Effect::BlinkFast),
+                "reversed" => Ok(Effect::Reversed),
+                "hidden" => Ok(Effect::Hidden),
+                "strikethrough" => Ok(Effect::Strikethrough),
+                other => Err(PyValueError::new_err(format!("Unknown effect {}", other,))),
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let mut style = Style::new().effects(&effects);
         if let Some(fg_col) = self.fg {
             style = style.truecolor(fg_col.red(), fg_col.green(), fg_col.blue());
         }
         if let Some(bg_col) = self.bg {
             style = style.on_truecolor(bg_col.red(), bg_col.green(), bg_col.blue());
         }
-        text.style(style).to_string()
+        Ok(text.style(style).to_string())
     }
 }
 impl<'py> TryFrom<Bound<'py, PyAny>> for TextStyle {
@@ -261,29 +277,27 @@ impl FromStr for TextStyle {
         let re = Regex::new(&format!(
             r"^(?P<styles>(?:({effects_re})\s*)*)?(?P<fg>#[\da-f]{{6}}|\w+)?(?:\s*on\s+(?P<bg>#[\da-f]{{6}}|\w+))?$"
 )).unwrap();
-        let mut effects = Vec::new();
+        let mut effects = HashSet::new();
         if let Some(captures) = re.captures(s.to_lowercase().trim()) {
             if let Some(matched_effects) = captures.name("styles") {
                 effects = matched_effects
                     .as_str()
                     .split_whitespace()
-                    .map(|style| match style {
-                        "bold" => Ok(Effect::Bold),
-                        "dimmed" => Ok(Effect::Dimmed),
-                        "italic" => Ok(Effect::Italic),
-                        "underline" => Ok(Effect::Underline),
-                        "blink" => Ok(Effect::Blink),
-                        "blinkfast" => Ok(Effect::BlinkFast),
-                        "reversed" => Ok(Effect::Reversed),
-                        "hidden" => Ok(Effect::Hidden),
-                        "strikethrough" => Ok(Effect::Strikethrough),
-                        other => Err(PyValueError::new_err(format!(
-                            "Unknown effect {}, (valid options are [{}]",
-                            other,
-                            all_effects.join(", ")
-                        ))),
+                    .map(|s| s.to_string())
+                    .collect::<HashSet<String>>()
+                    .iter()
+                    .map(|effect| {
+                        if all_effects.contains(&effect.as_str()) {
+                            Ok(effect.to_owned())
+                        } else {
+                            Err(PyValueError::new_err(format!(
+                                "Unknown effect {}, (valid options are [{}]",
+                                effect,
+                                all_effects.join(", ")
+                            )))
+                        }
                     })
-                    .collect::<Result<Vec<Effect>, Self::Err>>()?;
+                    .collect::<Result<HashSet<String>, Self::Err>>()?;
             }
             let mut fg = None;
             if let Some(fg_str) = captures.name("fg").map(|m| m.as_str()) {
@@ -342,13 +356,11 @@ impl Pixel {
             weight: self.weight,
         }
     }
-    fn __str__(&self) -> String {
-        self.to_string()
+    fn __str__(&self) -> PyResult<String> {
+        self.render()
     }
-}
-impl Display for Pixel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.style.render(&self.character.to_string()))
+    fn render(&self) -> PyResult<String> {
+        self.style.render(&self.character.to_string())
     }
 }
 
@@ -430,7 +442,7 @@ fn render(args: &Bound<'_, PyTuple>) -> PyResult<String> {
     for y in (min_y..=max_y).rev() {
         for x in min_x..=max_x {
             if let Some(p) = map.get(&(x, y)) {
-                output.push_str(&p.to_string());
+                output.push_str(&p.render()?);
             } else {
                 output.push(' ');
             }
