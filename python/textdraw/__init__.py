@@ -1,3 +1,3 @@
-from .textdraw import BoundingBox, Group, Pixel, Style, render
+from .textdraw import BoundingBox, Box, Group, Pixel, Style, TextPath, arrow, render
 
-__all__ = ["BoundingBox", "Group", "Pixel", "Style", "render"]
+__all__ = ['BoundingBox', 'Group', 'Pixel', 'Style', 'TextPath', 'arrow', 'renderBox']
