@@ -1118,11 +1118,12 @@ struct Box {
     transparent: bool,
     #[pyo3(get, set)]
     transparent_padding: bool,
+    bbox: BoundingBox,
 }
 #[pymethods]
 impl Box {
     #[new]
-    #[pyo3(signature = (text = "", position = (0, 0), width = None, height = None, style = None, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = None, padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = true))]
+    #[pyo3(signature = (text = "", position = (0, 0), width = None, height = None, style = None, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = (0, 1, 0, 1), padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
     fn new(
         text: &str,
         position: (isize, isize),
@@ -1156,6 +1157,7 @@ impl Box {
             truncate_string,
             transparent,
             transparent_padding,
+            bbox: BoundingBox::default(),
         })
     }
     #[getter]
@@ -1185,6 +1187,17 @@ impl Box {
         self.justify = justify.parse()?;
         Ok(())
     }
+    #[getter]
+    fn get_bbox(&self) -> BoundingBox {
+        let (_, bb_text) = self.format_text();
+        let padding = self.padding.unwrap_or_default();
+        BoundingBox::new(
+            bb_text.top + padding.0 as isize + 1,
+            bb_text.right + padding.1 as isize + 1,
+            bb_text.bottom - padding.2 as isize - 1,
+            bb_text.left - padding.3 as isize - 1,
+        )
+    }
 }
 impl Box {
     fn as_group(&self) -> Group {
@@ -1206,7 +1219,7 @@ impl Box {
         pixels.extend(text_pixels);
         Group {
             pixels: pixels.values().cloned().collect(),
-            position: self.position,
+            position: (0, 0),
             style: TextStyle::default(),
             weight: self.weight,
         }

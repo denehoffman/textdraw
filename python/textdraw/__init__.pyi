@@ -104,6 +104,7 @@ class Box:
     truncate_string: str | None
     transparent: bool
     transparent_padding: bool
+    bbox: BoundingBox
 
     def __init__(
         self,
@@ -115,7 +116,7 @@ class Box:
         border_style: str | None = None,
         line_style: Literal['regular', 'double', 'thick'] | None = 'regular',
         weight: int | None = 1,
-        padding: tuple[int, int, int, int] | None = None,
+        padding: tuple[int, int, int, int] | None = (0, 1, 0, 1),
         padding_style: str | None = None,
         align: Literal['top', 'center', 'bottom'] = 'top',
         justify: Literal['right', 'center', 'left'] = 'left',
