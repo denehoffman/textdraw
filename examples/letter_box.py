@@ -1,4 +1,4 @@
-from textdraw import Box, TextPath, render, Pixel, PixelGroup
+from textdraw import Box, Pixel, PixelGroup, TextPath, render
 
 
 class LetterBox:
