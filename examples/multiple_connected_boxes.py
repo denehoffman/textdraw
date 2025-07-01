@@ -26,11 +26,11 @@ paths = [
     ('C', 'D', 'magenta'),
     ('A', 'E', 'yellow'),
     ('F', 'E', 'cyan'),
-    ('E', 'D', 'bold blue'),
+    ('E', 'D', 'bright_blue'),
 ]
 
 for start, end, color in paths:
-    path = TextPath(coords[start], coords[end], style=color)
+    path = TextPath(coords[start], coords[end], style=color, bend_penalty=0)
     objs.append(path)
 
 print(render(*reversed(objs)))
