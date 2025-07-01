@@ -3,18 +3,129 @@
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
-    fmt::Display,
-    ops::{Add, AddAssign},
+    fmt::{Debug, Display},
+    ops::{Add, AddAssign, Sub},
     str::FromStr,
 };
 
-use owo_colors::{Effect, OwoColorize, Style};
+use owo_colors::{AnsiColors, Effect, OwoColorize, Style};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     prelude::*,
     types::{PyList, PyTuple},
 };
 use regex::Regex;
+
+#[pyclass]
+#[derive(Default, Clone, Copy, Eq, PartialEq, Hash)]
+struct Point(isize, isize);
+#[pymethods]
+impl Point {
+    #[new]
+    fn new(x: isize, y: isize) -> Self {
+        Self(x, y)
+    }
+    #[getter]
+    fn x(&self) -> isize {
+        self.0
+    }
+    #[getter]
+    fn y(&self) -> isize {
+        self.1
+    }
+    fn __add__(&self, rhs: Bound<PyAny>) -> PyResult<Point> {
+        Ok(self + &Point::extract_bound(&rhs)?)
+    }
+    fn __sub__(&self, rhs: Bound<PyAny>) -> PyResult<Point> {
+        Ok(self - &Point::extract_bound(&rhs)?)
+    }
+    fn __repr__(&self) -> String {
+        self.to_string()
+    }
+    fn __str__(&self) -> String {
+        self.to_string()
+    }
+}
+impl Debug for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl Point {
+    fn extract_bound<'py>(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+        if let Ok(tup) = ob.extract::<(isize, isize)>() {
+            Ok(tup.into())
+        } else {
+            Ok(Point::extract_bound(ob)?)
+        }
+    }
+}
+impl From<(isize, isize)> for Point {
+    fn from(value: (isize, isize)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+impl Add<&Point> for &Point {
+    type Output = Point;
+
+    fn add(self, rhs: &Point) -> Self::Output {
+        Point(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, rhs: Point) -> Self::Output {
+        &self + &rhs
+    }
+}
+impl Add<(isize, isize)> for &Point {
+    type Output = Point;
+
+    fn add(self, rhs: (isize, isize)) -> Self::Output {
+        Point(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+impl Add<(isize, isize)> for Point {
+    type Output = Point;
+
+    fn add(self, rhs: (isize, isize)) -> Self::Output {
+        &self + rhs
+    }
+}
+impl Sub<&Point> for &Point {
+    type Output = Point;
+
+    fn sub(self, rhs: &Point) -> Self::Output {
+        Point(self.0 - rhs.0, self.1 - rhs.1)
+    }
+}
+impl Sub for Point {
+    type Output = Point;
+
+    fn sub(self, rhs: Point) -> Self::Output {
+        &self - &rhs
+    }
+}
+impl Sub<(isize, isize)> for &Point {
+    type Output = Point;
+
+    fn sub(self, rhs: (isize, isize)) -> Self::Output {
+        Point(self.0 - rhs.0, self.1 - rhs.1)
+    }
+}
+impl Sub<(isize, isize)> for Point {
+    type Output = Point;
+
+    fn sub(self, rhs: (isize, isize)) -> Self::Output {
+        &self - rhs
+    }
+}
 
 #[pyclass]
 #[derive(Default, Copy, Clone, Debug)]
@@ -29,7 +140,7 @@ struct BoundingBox {
     left: isize,
 }
 impl BoundingBox {
-    fn contains_point(&self, p: (isize, isize)) -> bool {
+    fn contains_point(&self, p: &Point) -> bool {
         p.0 >= self.left && p.0 <= self.right && p.1 >= self.bottom && p.1 <= self.top
     }
     fn contains_bounding_box(&self, bbox: BoundingBox) -> bool {
@@ -45,23 +156,23 @@ impl BoundingBox {
         line_style: Option<LineStyle>,
         weight: Option<usize>,
         transparent: bool,
-    ) -> HashMap<(isize, isize), Pixel> {
+    ) -> HashMap<Point, Pixel> {
         let mut pixels = HashMap::default();
         for i in self.left + 1..self.right {
             pixels.insert(
-                (i, self.top),
+                Point(i, self.top),
                 Pixel {
                     character: line_style.map_or(' ', |ls| ls.get_char((false, true, false, true))),
-                    position: (i, self.top),
+                    position: Point(i, self.top),
                     style: border_style.clone(),
                     weight,
                 },
             );
             pixels.insert(
-                (i, self.bottom),
+                Point(i, self.bottom),
                 Pixel {
                     character: line_style.map_or(' ', |ls| ls.get_char((false, true, false, true))),
-                    position: (i, self.bottom),
+                    position: Point(i, self.bottom),
                     style: border_style.clone(),
                     weight,
                 },
@@ -69,56 +180,56 @@ impl BoundingBox {
         }
         for j in self.bottom + 1..self.top {
             pixels.insert(
-                (self.left, j),
+                Point(self.left, j),
                 Pixel {
                     character: line_style.map_or(' ', |ls| ls.get_char((true, false, true, false))),
-                    position: (self.left, j),
+                    position: Point(self.left, j),
                     style: border_style.clone(),
                     weight,
                 },
             );
             pixels.insert(
-                (self.right, j),
+                Point(self.right, j),
                 Pixel {
                     character: line_style.map_or(' ', |ls| ls.get_char((true, false, true, false))),
-                    position: (self.right, j),
+                    position: Point(self.right, j),
                     style: border_style.clone(),
                     weight,
                 },
             );
         }
         pixels.insert(
-            (self.right, self.top),
+            Point(self.right, self.top),
             Pixel {
                 character: line_style.map_or(' ', |ls| ls.get_char((false, false, true, true))),
-                position: (self.right, self.top),
+                position: Point(self.right, self.top),
                 style: border_style.clone(),
                 weight,
             },
         );
         pixels.insert(
-            (self.right, self.bottom),
+            Point(self.right, self.bottom),
             Pixel {
                 character: line_style.map_or(' ', |ls| ls.get_char((true, false, false, true))),
-                position: (self.right, self.bottom),
+                position: Point(self.right, self.bottom),
                 style: border_style.clone(),
                 weight,
             },
         );
         pixels.insert(
-            (self.left, self.top),
+            Point(self.left, self.top),
             Pixel {
                 character: line_style.map_or(' ', |ls| ls.get_char((false, true, true, false))),
-                position: (self.left, self.top),
+                position: Point(self.left, self.top),
                 style: border_style.clone(),
                 weight,
             },
         );
         pixels.insert(
-            (self.left, self.bottom),
+            Point(self.left, self.bottom),
             Pixel {
                 character: line_style.map_or(' ', |ls| ls.get_char((true, true, false, false))),
-                position: (self.left, self.bottom),
+                position: Point(self.left, self.bottom),
                 style: border_style.clone(),
                 weight,
             },
@@ -127,10 +238,10 @@ impl BoundingBox {
             for i in self.left + 1..self.right {
                 for j in self.bottom + 1..self.top {
                     pixels.insert(
-                        (i, j),
+                        Point(i, j),
                         Pixel {
                             character: ' ',
-                            position: (i, j),
+                            position: Point(i, j),
                             style: fill_style.clone(),
                             weight,
                         },
@@ -153,8 +264,8 @@ impl BoundingBox {
         }
     }
     fn __contains__(&self, other: Bound<PyAny>) -> PyResult<bool> {
-        if let Ok(point) = other.extract::<(isize, isize)>() {
-            Ok(self.contains_point(point))
+        if let Ok(point) = Point::extract_bound(&other) {
+            Ok(self.contains_point(&point))
         } else if let Ok(bbox) = other.extract::<BoundingBox>() {
             Ok(self.contains_bounding_box(bbox))
         } else {
@@ -164,7 +275,7 @@ impl BoundingBox {
         }
     }
     fn __add__(&self, other: Bound<PyAny>) -> PyResult<BoundingBox> {
-        if let Ok(point) = other.extract::<(isize, isize)>() {
+        if let Ok(point) = Point::extract_bound(&other) {
             Ok(*self + point)
         } else if let Ok(bbox) = other.extract::<BoundingBox>() {
             Ok(*self + bbox)
@@ -209,10 +320,10 @@ impl AddAssign for BoundingBox {
         self.left = self.left.min(rhs.left);
     }
 }
-impl Add<(isize, isize)> for BoundingBox {
+impl Add<Point> for BoundingBox {
     type Output = BoundingBox;
 
-    fn add(self, rhs: (isize, isize)) -> Self::Output {
+    fn add(self, rhs: Point) -> Self::Output {
         BoundingBox {
             top: self.top.max(rhs.1),
             right: self.right.max(rhs.0),
@@ -221,8 +332,8 @@ impl Add<(isize, isize)> for BoundingBox {
         }
     }
 }
-impl AddAssign<(isize, isize)> for BoundingBox {
-    fn add_assign(&mut self, rhs: (isize, isize)) {
+impl AddAssign<Point> for BoundingBox {
+    fn add_assign(&mut self, rhs: Point) {
         self.top = self.top.max(rhs.1);
         self.right = self.right.max(rhs.0);
         self.bottom = self.bottom.min(rhs.1);
@@ -245,12 +356,145 @@ impl From<BoundingBox> for (isize, isize, isize, isize) {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Color {
+    Ansi(AnsiColors),
+    Rgb(color_art::Color),
+}
+impl Default for Color {
+    fn default() -> Self {
+        Self::Ansi(AnsiColors::Default)
+    }
+}
+impl Color {
+    fn is_default(&self) -> bool {
+        match self {
+            Color::Ansi(ansi_colors) => ansi_colors == &AnsiColors::Default,
+            Color::Rgb(_) => false,
+        }
+    }
+    fn or(self, other: Self) -> Self {
+        if self.is_default() {
+            other
+        } else {
+            self
+        }
+    }
+    fn update_style_fg(&self, style: Style) -> Style {
+        match self {
+            Color::Ansi(ansi_colors) => match ansi_colors {
+                AnsiColors::Black => style.black(),
+                AnsiColors::Red => style.red(),
+                AnsiColors::Green => style.green(),
+                AnsiColors::Yellow => style.yellow(),
+                AnsiColors::Blue => style.blue(),
+                AnsiColors::Magenta => style.magenta(),
+                AnsiColors::Cyan => style.cyan(),
+                AnsiColors::White => style.white(),
+                AnsiColors::Default => style.default_color(),
+                AnsiColors::BrightBlack => style.bright_black(),
+                AnsiColors::BrightRed => style.bright_red(),
+                AnsiColors::BrightGreen => style.bright_green(),
+                AnsiColors::BrightYellow => style.bright_yellow(),
+                AnsiColors::BrightBlue => style.bright_blue(),
+                AnsiColors::BrightMagenta => style.bright_magenta(),
+                AnsiColors::BrightCyan => style.bright_cyan(),
+                AnsiColors::BrightWhite => style.bright_white(),
+            },
+            Color::Rgb(color) => style.truecolor(color.red(), color.green(), color.blue()),
+        }
+    }
+    fn update_style_bg(&self, style: Style) -> Style {
+        match self {
+            Color::Ansi(ansi_colors) => match ansi_colors {
+                AnsiColors::Black => style.on_black(),
+                AnsiColors::Red => style.on_red(),
+                AnsiColors::Green => style.on_green(),
+                AnsiColors::Yellow => style.on_yellow(),
+                AnsiColors::Blue => style.on_blue(),
+                AnsiColors::Magenta => style.on_magenta(),
+                AnsiColors::Cyan => style.on_cyan(),
+                AnsiColors::White => style.on_white(),
+                AnsiColors::Default => style.on_default_color(),
+                AnsiColors::BrightBlack => style.on_bright_black(),
+                AnsiColors::BrightRed => style.on_bright_red(),
+                AnsiColors::BrightGreen => style.on_bright_green(),
+                AnsiColors::BrightYellow => style.on_bright_yellow(),
+                AnsiColors::BrightBlue => style.on_bright_blue(),
+                AnsiColors::BrightMagenta => style.on_bright_magenta(),
+                AnsiColors::BrightCyan => style.on_bright_cyan(),
+                AnsiColors::BrightWhite => style.on_bright_white(),
+            },
+            Color::Rgb(color) => style.on_truecolor(color.red(), color.green(), color.blue()),
+        }
+    }
+}
+impl FromStr for Color {
+    type Err = PyErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "black" => Ok(Color::Ansi(AnsiColors::Black)),
+            "red" => Ok(Color::Ansi(AnsiColors::Red)),
+            "green" => Ok(Color::Ansi(AnsiColors::Green)),
+            "yellow" => Ok(Color::Ansi(AnsiColors::Yellow)),
+            "blue" => Ok(Color::Ansi(AnsiColors::Blue)),
+            "magenta" => Ok(Color::Ansi(AnsiColors::Magenta)),
+            "cyan" => Ok(Color::Ansi(AnsiColors::Cyan)),
+            "white" => Ok(Color::Ansi(AnsiColors::White)),
+            "default" => Ok(Color::Ansi(AnsiColors::Default)),
+            "bright_black" => Ok(Color::Ansi(AnsiColors::BrightBlack)),
+            "bright_red" => Ok(Color::Ansi(AnsiColors::BrightRed)),
+            "bright_green" => Ok(Color::Ansi(AnsiColors::BrightGreen)),
+            "bright_yellow" => Ok(Color::Ansi(AnsiColors::BrightYellow)),
+            "bright_blue" => Ok(Color::Ansi(AnsiColors::BrightBlue)),
+            "bright_magenta" => Ok(Color::Ansi(AnsiColors::BrightMagenta)),
+            "bright_cyan" => Ok(Color::Ansi(AnsiColors::BrightCyan)),
+            "bright_white" => Ok(Color::Ansi(AnsiColors::BrightWhite)),
+            _ => Ok(Color::Rgb(
+                s.parse()
+                    .map_err(|e| PyValueError::new_err(format!("{}", e)))?,
+            )),
+        }
+    }
+}
+impl Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Color::Ansi(color) => match color {
+                    AnsiColors::Black => "black",
+                    AnsiColors::Red => "red",
+                    AnsiColors::Green => "green",
+                    AnsiColors::Yellow => "yellow",
+                    AnsiColors::Blue => "blue",
+                    AnsiColors::Magenta => "magenta",
+                    AnsiColors::Cyan => "cyan",
+                    AnsiColors::White => "white",
+                    AnsiColors::Default => "default",
+                    AnsiColors::BrightBlack => "bright_black",
+                    AnsiColors::BrightRed => "bright_red",
+                    AnsiColors::BrightGreen => "bright_green",
+                    AnsiColors::BrightYellow => "bright_yellow",
+                    AnsiColors::BrightBlue => "bright_blue",
+                    AnsiColors::BrightMagenta => "bright_magenta",
+                    AnsiColors::BrightCyan => "bright_cyan",
+                    AnsiColors::BrightWhite => "bright_white",
+                }
+                .to_string(),
+                Color::Rgb(color) => color.hex(),
+            }
+        )
+    }
+}
 #[pyclass(name = "Style")]
 #[derive(Default, Clone, Debug)]
 struct TextStyle {
     effects: HashSet<String>,
-    fg: Option<color_art::Color>,
-    bg: Option<color_art::Color>,
+    fg: Color,
+    bg: Color,
 }
 #[pymethods]
 impl TextStyle {
@@ -267,16 +511,8 @@ impl TextStyle {
     fn __str__(&self) -> String {
         format!(
             "Style(fg={}, bg={}, effects=[{}])",
-            if let Some(fg) = self.fg {
-                fg.hex()
-            } else {
-                "None".to_string()
-            },
-            if let Some(bg) = self.bg {
-                bg.hex()
-            } else {
-                "None".to_string()
-            },
+            self.fg,
+            self.bg,
             self.effects
                 .clone()
                 .into_iter()
@@ -304,12 +540,8 @@ impl TextStyle {
             })
             .collect::<PyResult<Vec<_>>>()?;
         let mut style = Style::new().effects(&effects);
-        if let Some(fg_col) = self.fg {
-            style = style.truecolor(fg_col.red(), fg_col.green(), fg_col.blue());
-        }
-        if let Some(bg_col) = self.bg {
-            style = style.on_truecolor(bg_col.red(), bg_col.green(), bg_col.blue());
-        }
+        style = self.fg.update_style_fg(style);
+        style = self.bg.update_style_bg(style);
         Ok(text.style(style).to_string())
     }
 }
@@ -317,6 +549,19 @@ impl<'py> TryFrom<Bound<'py, PyAny>> for TextStyle {
     type Error = PyErr;
 
     fn try_from(value: Bound<PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(s) = value.extract::<String>() {
+            s.parse()
+        } else if let Ok(ts) = value.extract::<TextStyle>() {
+            Ok(ts)
+        } else {
+            Err(PyTypeError::new_err("Expected either a str or a Style"))
+        }
+    }
+}
+impl<'a, 'py> TryFrom<&'a Bound<'py, PyAny>> for TextStyle {
+    type Error = PyErr;
+
+    fn try_from(value: &'a Bound<PyAny>) -> Result<Self, Self::Error> {
         if let Ok(s) = value.extract::<String>() {
             s.parse()
         } else if let Ok(ts) = value.extract::<TextStyle>() {
@@ -372,19 +617,13 @@ impl FromStr for TextStyle {
                     .map(|s| s.to_string())
                     .collect::<HashSet<String>>();
             }
-            let mut fg = None;
+            let mut fg = Color::default();
             if let Some(fg_str) = captures.name("fg").map(|m| m.as_str()) {
-                let c: color_art::Color = fg_str
-                    .parse()
-                    .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
-                fg = Some(c);
+                fg = fg_str.parse()?;
             }
-            let mut bg = None;
+            let mut bg = Color::default();
             if let Some(bg_str) = captures.name("bg").map(|m| m.as_str()) {
-                let c: color_art::Color = bg_str
-                    .parse()
-                    .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
-                bg = Some(c);
+                bg = bg_str.parse()?;
             }
             return Ok(TextStyle { effects, fg, bg });
         }
@@ -397,8 +636,8 @@ impl FromStr for TextStyle {
 struct Pixel {
     #[pyo3(get, set)]
     character: char,
-    #[pyo3(get, set)]
-    position: (isize, isize),
+    #[pyo3(get)]
+    position: Point,
     #[pyo3(get, set)]
     style: TextStyle,
     #[pyo3(get, set)]
@@ -410,30 +649,38 @@ impl Pixel {
     #[pyo3(signature = (character, position = None, style = None, *, weight = None))]
     fn new(
         character: char,
-        position: Option<(isize, isize)>,
+        position: Option<Bound<PyAny>>,
         style: Option<String>,
         weight: Option<usize>,
     ) -> PyResult<Self> {
         Ok(Self {
             character,
-            position: position.unwrap_or_default(),
+            position: position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
             style: style.unwrap_or_default().parse()?,
             weight,
         })
     }
-    fn at(&self, position: (isize, isize)) -> Self {
-        Self {
+    fn at(&self, position: Bound<PyAny>) -> PyResult<Self> {
+        Ok(Self {
             character: self.character,
-            position,
+            position: Point::extract_bound(&position)?,
             style: self.style.clone(),
             weight: self.weight,
-        }
+        })
     }
     fn __str__(&self) -> PyResult<String> {
         self.render()
     }
     fn render(&self) -> PyResult<String> {
         self.style.render(&self.character.to_string())
+    }
+    #[setter]
+    fn set_position(&mut self, point: Bound<PyAny>) -> PyResult<()> {
+        self.position = Point::extract_bound(&point)?;
+        Ok(())
     }
 }
 impl Pixel {
@@ -446,26 +693,29 @@ impl Pixel {
 
 #[pyclass(sequence)]
 #[derive(Clone)]
-struct Group {
+struct PixelGroup {
     #[pyo3(get, set)]
     pixels: Vec<Pixel>,
-    position: (isize, isize),
+    position: Point,
     style: TextStyle,
     weight: Option<usize>,
 }
 #[pymethods]
-impl Group {
+impl PixelGroup {
     #[new]
     #[pyo3(signature = (pixels, position = None, style = None, *, weight = 0))]
     fn new(
         pixels: Vec<Pixel>,
-        position: Option<(isize, isize)>,
+        position: Option<Bound<PyAny>>,
         style: Option<String>,
         weight: Option<usize>,
     ) -> PyResult<Self> {
         Ok(Self {
             pixels,
-            position: position.unwrap_or_default(),
+            position: position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
             style: style.unwrap_or_default().parse()?,
             weight,
         })
@@ -479,18 +729,18 @@ impl Group {
     fn __setitem__(&mut self, index: usize, value: Pixel) {
         self.pixels[index] = value;
     }
-    fn at(&self, position: (isize, isize)) -> Self {
-        Self {
+    fn at(&self, position: Bound<PyAny>) -> PyResult<Self> {
+        Ok(Self {
             pixels: self.pixels.clone(),
-            position,
+            position: Point::extract_bound(&position)?,
             style: self.style.clone(),
             weight: self.weight,
-        }
+        })
     }
 }
 
-fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<(isize, isize), Pixel>> {
-    let mut map: HashMap<(isize, isize), Pixel> = HashMap::new();
+fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<Point, Pixel>> {
+    let mut map: HashMap<Point, Pixel> = HashMap::new();
     let objs: Vec<Bound<PyAny>> = if let Ok(it) = args.downcast::<PyTuple>() {
         it.iter().collect()
     } else if let Ok(it) = args.downcast::<PyList>() {
@@ -501,12 +751,10 @@ fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<(isize, isize), Pixe
     for obj in objs {
         if let Ok(pixel) = obj.extract::<Pixel>() {
             map.insert(pixel.position, pixel);
-        } else if let Ok(group) = obj.extract::<Group>() {
+        } else if let Ok(group) = obj.extract::<PixelGroup>() {
             for p in &group.pixels {
                 let mut new_pixel = p.clone();
-                let x = new_pixel.position.0 + group.position.0;
-                let y = new_pixel.position.1 + group.position.1;
-                new_pixel.position = (x, y);
+                new_pixel.position = new_pixel.position + group.position;
                 new_pixel.style += group.style.clone();
                 new_pixel.weight = match (new_pixel.weight, group.weight) {
                     (None, _) | (_, None) => None,
@@ -518,9 +766,7 @@ fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<(isize, isize), Pixe
             let group = textpath.as_group()?;
             for p in &group.pixels {
                 let mut new_pixel = p.clone();
-                let x = new_pixel.position.0 + group.position.0;
-                let y = new_pixel.position.1 + group.position.1;
-                new_pixel.position = (x, y);
+                new_pixel.position = new_pixel.position + group.position;
                 new_pixel.style += group.style.clone();
                 new_pixel.weight = match (new_pixel.weight, group.weight) {
                     (None, _) | (_, None) => None,
@@ -532,9 +778,7 @@ fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<(isize, isize), Pixe
             let group = textbox.as_group();
             for p in &group.pixels {
                 let mut new_pixel = p.clone();
-                let x = new_pixel.position.0 + group.position.0;
-                let y = new_pixel.position.1 + group.position.1;
-                new_pixel.position = (x, y);
+                new_pixel.position = new_pixel.position + group.position;
                 new_pixel.style += group.style.clone();
                 new_pixel.weight = match (new_pixel.weight, group.weight) {
                     (None, _) | (_, None) => None,
@@ -544,18 +788,18 @@ fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<(isize, isize), Pixe
             }
         } else {
             return Err(PyTypeError::new_err(
-                "Expected either Pixels, Groups, TextPaths, or Boxes as arguments",
+                "Expected either Pixels, PixelGroups, TextPaths, or Boxes as arguments",
             ));
         }
     }
     Ok(map)
 }
 
-fn map_to_bounding_box(map: &HashMap<(isize, isize), Pixel>) -> BoundingBox {
-    let min_x = map.keys().map(|(x, _)| *x).min().unwrap_or_default();
-    let min_y = map.keys().map(|(_, y)| *y).min().unwrap_or_default();
-    let max_x = map.keys().map(|(x, _)| *x).max().unwrap_or_default();
-    let max_y = map.keys().map(|(_, y)| *y).max().unwrap_or_default();
+fn map_to_bounding_box(map: &HashMap<Point, Pixel>) -> BoundingBox {
+    let min_x = map.keys().map(|p| p.0).min().unwrap_or_default();
+    let min_y = map.keys().map(|p| p.1).min().unwrap_or_default();
+    let max_x = map.keys().map(|p| p.0).max().unwrap_or_default();
+    let max_y = map.keys().map(|p| p.1).max().unwrap_or_default();
     BoundingBox {
         top: max_y,
         right: max_x,
@@ -595,7 +839,7 @@ fn render(args: &Bound<'_, PyTuple>) -> PyResult<String> {
     let mut output = String::new();
     for y in (bb.bottom..=bb.top).rev() {
         for x in bb.left..=bb.right {
-            if let Some(p) = map.get(&(x, y)) {
+            if let Some(p) = map.get(&Point(x, y)) {
                 output.push_str(&p.render()?);
             } else {
                 output.push(' ');
@@ -615,13 +859,14 @@ enum Direction {
     Left,
 }
 impl Direction {
-    fn delta(self) -> (isize, isize) {
+    fn delta(self) -> Point {
         match self {
-            Direction::Up => (0, -1),
+            Direction::Up => (0, 1),
             Direction::Right => (1, 0),
-            Direction::Down => (0, 1),
+            Direction::Down => (0, -1),
             Direction::Left => (-1, 0),
         }
+        .into()
     }
 
     fn all() -> [Direction; 4] {
@@ -813,7 +1058,7 @@ fn arrow(s: &str) -> PyResult<String> {
 #[derive(Eq, PartialEq)]
 struct State {
     cost: usize,
-    pos: (isize, isize),
+    pos: Point,
     dir: Option<Direction>,
 }
 impl Ord for State {
@@ -830,7 +1075,7 @@ impl PartialOrd for State {
 #[pyclass]
 #[derive(Clone)]
 struct TextPath {
-    path: Vec<(isize, isize)>,
+    path: Vec<Point>,
     #[pyo3(get, set)]
     style: TextStyle,
     line_style: LineStyle,
@@ -838,9 +1083,9 @@ struct TextPath {
     weight: Option<usize>,
     start_direction: Option<Direction>,
     end_direction: Option<Direction>,
-    start: (isize, isize),
-    end: (isize, isize),
-    paths: HashMap<(isize, isize), Pixel>,
+    start: Point,
+    end: Point,
+    paths: HashMap<Point, Pixel>,
 }
 
 #[pymethods]
@@ -849,8 +1094,8 @@ impl TextPath {
     #[pyo3(signature = (start, end, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None))]
     fn new(
         py: Python,
-        start: (isize, isize),
-        end: (isize, isize),
+        start: Bound<PyAny>,
+        end: Bound<PyAny>,
         style: Option<String>,
         line_style: String,
         weight: Option<usize>,
@@ -861,6 +1106,8 @@ impl TextPath {
         barriers: Option<Bound<'_, PyAny>>,
         paths: Option<Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
+        let start = Point::extract_bound(&start)?;
+        let end = Point::extract_bound(&end)?;
         let mut environment =
             objs_to_map(&environment.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
         for (position, pixel) in
@@ -908,9 +1155,9 @@ impl TextPath {
             }
 
             for new_dir in Direction::all() {
-                let (dx, dy) = new_dir.delta();
-                let next = (pos.0 + dx, pos.1 + dy);
-                if !bb.contains_point(next) {
+                let delta = new_dir.delta();
+                let next = pos + delta;
+                if !bb.contains_point(&next) {
                     continue;
                 }
                 let weight = match environment.get(&next) {
@@ -927,7 +1174,7 @@ impl TextPath {
                 };
                 let new_cost = cost + weight + bend_cost;
                 let entry = cost_so_far.entry(next).or_insert(usize::MAX);
-                let heuristic = |pos: (isize, isize)| -> usize {
+                let heuristic = |pos: Point| -> usize {
                     ((end.0 - pos.0).abs() + (end.1 - pos.1).abs()) as usize
                 };
                 if new_cost < *entry {
@@ -974,32 +1221,26 @@ impl TextPath {
     }
 }
 impl TextPath {
-    fn as_group(&self) -> PyResult<Group> {
-        let mut path_map: HashSet<(isize, isize)> = self.path.clone().into_iter().collect();
+    fn as_group(&self) -> PyResult<PixelGroup> {
+        let mut path_map: HashSet<Point> = self.path.clone().into_iter().collect();
         for (pos, _) in self.paths.iter() {
             path_map.insert(*pos);
         }
         if let Some(start_dir) = self.start_direction {
-            path_map.insert((
-                self.start.0 + start_dir.delta().0,
-                self.start.1 + start_dir.delta().1,
-            ));
+            path_map.insert(self.start + start_dir.delta());
         }
         if let Some(end_dir) = self.end_direction {
-            path_map.insert((
-                self.end.0 + end_dir.delta().0,
-                self.end.1 + end_dir.delta().1,
-            ));
+            path_map.insert(self.end + end_dir.delta());
         }
         let path_neighbors: Vec<(bool, bool, bool, bool)> = self
             .path
             .iter()
             .map(|pos| {
                 (
-                    path_map.contains(&(pos.0, pos.1 + 1)),
-                    path_map.contains(&(pos.0 + 1, pos.1)),
-                    path_map.contains(&(pos.0, pos.1 - 1)),
-                    path_map.contains(&(pos.0 - 1, pos.1)),
+                    path_map.contains(&(pos + &Direction::Up.delta())),
+                    path_map.contains(&(pos + &Direction::Right.delta())),
+                    path_map.contains(&(pos + &Direction::Down.delta())),
+                    path_map.contains(&(pos + &Direction::Left.delta())),
                 )
             })
             .collect();
@@ -1014,9 +1255,9 @@ impl TextPath {
                 style: self.style.clone(),
             })
             .collect();
-        Ok(Group {
+        Ok(PixelGroup {
             pixels,
-            position: (0, 0),
+            position: Point::default(),
             style: TextStyle::default(),
             weight: Some(0),
         })
@@ -1094,7 +1335,7 @@ struct Box {
     #[pyo3(get, set)]
     text: String,
     #[pyo3(get, set)]
-    position: (isize, isize),
+    position: Point,
     #[pyo3(get, set)]
     width: Option<usize>,
     #[pyo3(get, set)]
@@ -1123,10 +1364,10 @@ struct Box {
 #[pymethods]
 impl Box {
     #[new]
-    #[pyo3(signature = (text = "", position = (0, 0), width = None, height = None, style = None, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = (0, 1, 0, 1), padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
+    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = (0, 1, 0, 1), padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
     fn new(
         text: &str,
-        position: (isize, isize),
+        position: Option<Bound<PyAny>>,
         width: Option<usize>,
         height: Option<usize>,
         style: Option<String>,
@@ -1143,7 +1384,10 @@ impl Box {
     ) -> PyResult<Self> {
         Ok(Self {
             text: text.to_string(),
-            position,
+            position: position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
             width,
             height,
             style: style.unwrap_or_default().parse()?,
@@ -1200,7 +1444,7 @@ impl Box {
     }
 }
 impl Box {
-    fn as_group(&self) -> Group {
+    fn as_group(&self) -> PixelGroup {
         let (text_pixels, bb_text) = self.format_text();
         let padding = self.padding.unwrap_or_default();
         let bb_border = BoundingBox::new(
@@ -1209,7 +1453,7 @@ impl Box {
             bb_text.bottom - padding.2 as isize - 1,
             bb_text.left - padding.3 as isize - 1,
         );
-        let mut pixels: HashMap<(isize, isize), Pixel> = bb_border.as_map(
+        let mut pixels: HashMap<Point, Pixel> = bb_border.as_map(
             &self.border_style,
             &self.padding_style,
             self.line_style,
@@ -1217,14 +1461,14 @@ impl Box {
             self.transparent_padding,
         );
         pixels.extend(text_pixels);
-        Group {
+        PixelGroup {
             pixels: pixels.values().cloned().collect(),
-            position: (0, 0),
+            position: Point::default(),
             style: TextStyle::default(),
             weight: self.weight,
         }
     }
-    fn format_text(&self) -> (HashMap<(isize, isize), Pixel>, BoundingBox) {
+    fn format_text(&self) -> (HashMap<Point, Pixel>, BoundingBox) {
         let trunc = self.truncate_string.clone().unwrap_or("".to_string());
 
         // Step 1: Break input into lines and wrap each line individually
@@ -1321,10 +1565,7 @@ impl Box {
                         .filter_map(|(i, c)| match c {
                             Some(chr) => Some(Pixel {
                                 character: chr.chars().collect::<Vec<char>>()[0],
-                                position: (
-                                    self.position.0 + i as isize,
-                                    self.position.1 + j as isize,
-                                ),
+                                position: self.position + (i as isize, j as isize),
                                 style: self.style.clone(),
                                 weight: self.weight,
                             }),
@@ -1334,10 +1575,7 @@ impl Box {
                                 } else {
                                     Some(Pixel {
                                         character: ' ',
-                                        position: (
-                                            self.position.0 + i as isize,
-                                            self.position.1 + j as isize,
-                                        ),
+                                        position: self.position + (i as isize, j as isize),
                                         style: self.style.clone(),
                                         weight: self.weight,
                                     })
@@ -1362,12 +1600,13 @@ impl Box {
 #[pymodule]
 fn textdraw(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<BoundingBox>()?;
-    m.add_class::<Group>()?;
+    m.add_class::<PixelGroup>()?;
     m.add_class::<TextStyle>()?;
     m.add_class::<Pixel>()?;
     m.add_function(wrap_pyfunction!(render, m)?)?;
     m.add_function(wrap_pyfunction!(arrow, m)?)?;
     m.add_class::<TextPath>()?;
     m.add_class::<Box>()?;
+    m.add_class::<Point>()?;
     Ok(())
 }

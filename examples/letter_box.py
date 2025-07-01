@@ -1,21 +1,21 @@
-from textdraw import Box, TextPath, render, Pixel, Group
+from textdraw import Box, TextPath, render, Pixel, PixelGroup
 
 
 class LetterBox:
     def __init__(self, letter: str, x: int, y: int):
         self.box = Box(letter, (x, y))
-        self.c_left = (self.box.bounding_box.left - 1, self.box.bounding_box.bottom + self.box.bounding_box.height // 2)
+        self.c_left = (self.box.bbox.left - 1, self.box.bbox.bottom + self.box.bbox.height // 2)
         self.c_right = (
-            self.box.bounding_box.right + 1,
-            self.box.bounding_box.bottom + self.box.bounding_box.height // 2,
+            self.box.bbox.right + 1,
+            self.box.bbox.bottom + self.box.bbox.height // 2,
         )
-        self.c_top = (self.box.bounding_box.left + self.box.bounding_box.width // 2, self.box.bounding_box.top + 1)
+        self.c_top = (self.box.bbox.left + self.box.bbox.width // 2, self.box.bbox.top + 1)
         self.c_bottom = (
-            self.box.bounding_box.left + self.box.bounding_box.width // 2,
-            self.box.bounding_box.bottom - 1,
+            self.box.bbox.left + self.box.bbox.width // 2,
+            self.box.bbox.bottom - 1,
         )
         marker = Pixel('⎚', style='green', weight=1)
-        self.margin_markers = Group(
+        self.margin_markers = PixelGroup(
             [
                 marker.at((self.c_left[0] - 2, self.c_left[1])),
                 marker.at((self.c_right[0] + 2, self.c_right[1])),
@@ -24,7 +24,7 @@ class LetterBox:
             ]
         )
         barrier = Pixel('⎚', style='red', weight=None)
-        self.barriers = Group(
+        self.barriers = PixelGroup(
             [
                 barrier.at((self.c_left[0], self.c_left[1] - 1)),
                 barrier.at((self.c_left[0], self.c_left[1] + 1)),
