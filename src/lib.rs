@@ -4,10 +4,11 @@ use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
     fmt::{Debug, Display},
-    ops::{Add, AddAssign, Sub},
+    ops::{Add, AddAssign},
     str::FromStr,
 };
 
+use auto_ops::{impl_op_ex, impl_op_ex_commutative};
 use owo_colors::{AnsiColors, Effect, OwoColorize, Style};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
@@ -34,16 +35,31 @@ impl Point {
         self.1
     }
     fn __add__(&self, rhs: Bound<PyAny>) -> PyResult<Point> {
-        Ok(self + &Point::extract_bound(&rhs)?)
+        Ok(self + rhs.extract::<Point>()?)
+    }
+    fn __radd__(&self, rhs: Bound<PyAny>) -> PyResult<Point> {
+        Ok(rhs.extract::<Point>()? + self)
     }
     fn __sub__(&self, rhs: Bound<PyAny>) -> PyResult<Point> {
-        Ok(self - &Point::extract_bound(&rhs)?)
+        Ok(self - rhs.extract::<Point>()?)
+    }
+    fn __rsub__(&self, rhs: Bound<PyAny>) -> PyResult<Point> {
+        Ok(rhs.extract::<Point>()? - self)
     }
     fn __repr__(&self) -> String {
         self.to_string()
     }
     fn __str__(&self) -> String {
         self.to_string()
+    }
+    #[pyo3(name = "midpoint")]
+    fn py_midpoint(&self, other: Bound<PyAny>) -> PyResult<Point> {
+        Ok(self.midpoint(&Point::extract_bound(&other)?))
+    }
+}
+impl Point {
+    fn midpoint(&self, other: &Point) -> Point {
+        Point((self.0 + other.0) / 2, (self.1 + other.1) / 2)
     }
 }
 impl Debug for Point {
@@ -61,7 +77,7 @@ impl Point {
         if let Ok(tup) = ob.extract::<(isize, isize)>() {
             Ok(tup.into())
         } else {
-            Ok(Point::extract_bound(ob)?)
+            Ok(ob.extract::<Point>()?)
         }
     }
 }
@@ -70,62 +86,14 @@ impl From<(isize, isize)> for Point {
         Self(value.0, value.1)
     }
 }
-impl Add<&Point> for &Point {
-    type Output = Point;
-
-    fn add(self, rhs: &Point) -> Self::Output {
-        Point(self.0 + rhs.0, self.1 + rhs.1)
-    }
-}
-impl Add for Point {
-    type Output = Point;
-
-    fn add(self, rhs: Point) -> Self::Output {
-        &self + &rhs
-    }
-}
-impl Add<(isize, isize)> for &Point {
-    type Output = Point;
-
-    fn add(self, rhs: (isize, isize)) -> Self::Output {
-        Point(self.0 + rhs.0, self.1 + rhs.1)
-    }
-}
-impl Add<(isize, isize)> for Point {
-    type Output = Point;
-
-    fn add(self, rhs: (isize, isize)) -> Self::Output {
-        &self + rhs
-    }
-}
-impl Sub<&Point> for &Point {
-    type Output = Point;
-
-    fn sub(self, rhs: &Point) -> Self::Output {
-        Point(self.0 - rhs.0, self.1 - rhs.1)
-    }
-}
-impl Sub for Point {
-    type Output = Point;
-
-    fn sub(self, rhs: Point) -> Self::Output {
-        &self - &rhs
-    }
-}
-impl Sub<(isize, isize)> for &Point {
-    type Output = Point;
-
-    fn sub(self, rhs: (isize, isize)) -> Self::Output {
-        Point(self.0 - rhs.0, self.1 - rhs.1)
-    }
-}
-impl Sub<(isize, isize)> for Point {
-    type Output = Point;
-
-    fn sub(self, rhs: (isize, isize)) -> Self::Output {
-        &self - rhs
-    }
-}
+#[rustfmt::skip]
+impl_op_ex!(+ |a: &Point, b: &Point| -> Point { Point(a.0 + b.0, a.1 + b.1) });
+#[rustfmt::skip]
+impl_op_ex!(- |a: &Point, b: &Point| -> Point { Point(a.0 - b.0, a.1 - b.1) });
+#[rustfmt::skip]
+impl_op_ex_commutative!(+ |a: &Point, b: &(isize, isize)| -> Point { Point(a.0 + b.0, a.1 + b.1) });
+#[rustfmt::skip]
+impl_op_ex_commutative!(- |a: &Point, b: &(isize, isize)| -> Point { Point(a.0 + b.0, a.1 + b.1) });
 
 #[pyclass]
 #[derive(Default, Copy, Clone, Debug)]
@@ -263,25 +231,32 @@ impl BoundingBox {
             left,
         }
     }
+    #[staticmethod]
+    #[pyo3(signature = (*args))]
+    fn wrap(args: &Bound<'_, PyTuple>) -> PyResult<BoundingBox> {
+        let map = objs_to_map(args)?;
+        let bbox = map_to_bounding_box(&map);
+        Ok(bbox)
+    }
     fn __contains__(&self, other: Bound<PyAny>) -> PyResult<bool> {
-        if let Ok(point) = Point::extract_bound(&other) {
+        if let Ok(point) = other.extract::<Point>() {
             Ok(self.contains_point(&point))
         } else if let Ok(bbox) = other.extract::<BoundingBox>() {
             Ok(self.contains_bounding_box(bbox))
         } else {
             Err(PyTypeError::new_err(
-                "Expected either a tuple[int, int] or a BoundingBox",
+                "Expected either a Point or a BoundingBox",
             ))
         }
     }
     fn __add__(&self, other: Bound<PyAny>) -> PyResult<BoundingBox> {
-        if let Ok(point) = Point::extract_bound(&other) {
+        if let Ok(point) = other.extract::<Point>() {
             Ok(*self + point)
         } else if let Ok(bbox) = other.extract::<BoundingBox>() {
             Ok(*self + bbox)
         } else {
             Err(PyTypeError::new_err(
-                "Expected either a tuple[int, int] or a BoundingBox",
+                "Expected either a Point or a BoundingBox",
             ))
         }
     }
@@ -299,47 +274,69 @@ impl BoundingBox {
     fn height(&self) -> usize {
         (self.top - self.bottom) as usize
     }
+    #[getter]
+    fn center(&self) -> Point {
+        Point((self.left + self.right) / 2, (self.bottom + self.top) / 2)
+    }
+    #[getter]
+    fn top_left(&self) -> Point {
+        Point(self.left, self.top)
+    }
+    #[getter]
+    fn top_center(&self) -> Point {
+        Point((self.left + self.right) / 2, self.top)
+    }
+    #[getter]
+    fn top_right(&self) -> Point {
+        Point(self.right, self.top)
+    }
+    #[getter]
+    fn bottom_left(&self) -> Point {
+        Point(self.left, self.bottom)
+    }
+    #[getter]
+    fn bottom_center(&self) -> Point {
+        Point((self.left + self.right) / 2, self.bottom)
+    }
+    #[getter]
+    fn bottom_right(&self) -> Point {
+        Point(self.right, self.bottom)
+    }
+    #[getter]
+    fn center_left(&self) -> Point {
+        Point(self.left, (self.bottom + self.top) / 2)
+    }
+    #[getter]
+    fn center_right(&self) -> Point {
+        Point(self.right, (self.bottom + self.top) / 2)
+    }
 }
-impl Add for BoundingBox {
-    type Output = BoundingBox;
+#[rustfmt::skip]
+impl_op_ex!(+ |a: &BoundingBox, b: &BoundingBox| -> BoundingBox { BoundingBox { top: a.top.max(b.top), right: a.right.max(b.right), bottom: a.bottom.min(b.bottom), left: a.left.min(b.left) } });
+#[rustfmt::skip]
+impl_op_ex!(+= |a: &mut BoundingBox, b: &BoundingBox| {
+        a.top =a.top.max(b.top);
+        a.right =a.right.max(b.right);
+        a.bottom =a.bottom.min(b.bottom);
+        a.left =a.left.min(b.left);
 
-    fn add(self, rhs: Self) -> Self::Output {
+});
+#[rustfmt::skip]
+impl_op_ex_commutative!(+ |a: &BoundingBox, b: &Point| -> BoundingBox {
         BoundingBox {
-            top: self.top.max(rhs.top),
-            right: self.right.max(rhs.right),
-            bottom: self.bottom.min(rhs.bottom),
-            left: self.left.min(rhs.left),
+            top:a.top.max(b.1),
+            right:a.right.max(b.0),
+            bottom:a.bottom.min(b.1),
+            left:a.left.min(b.0),
         }
-    }
-}
-impl AddAssign for BoundingBox {
-    fn add_assign(&mut self, rhs: Self) {
-        self.top = self.top.max(rhs.top);
-        self.right = self.right.max(rhs.right);
-        self.bottom = self.bottom.min(rhs.bottom);
-        self.left = self.left.min(rhs.left);
-    }
-}
-impl Add<Point> for BoundingBox {
-    type Output = BoundingBox;
-
-    fn add(self, rhs: Point) -> Self::Output {
-        BoundingBox {
-            top: self.top.max(rhs.1),
-            right: self.right.max(rhs.0),
-            bottom: self.bottom.min(rhs.1),
-            left: self.left.min(rhs.0),
-        }
-    }
-}
-impl AddAssign<Point> for BoundingBox {
-    fn add_assign(&mut self, rhs: Point) {
-        self.top = self.top.max(rhs.1);
-        self.right = self.right.max(rhs.0);
-        self.bottom = self.bottom.min(rhs.1);
-        self.left = self.left.min(rhs.0);
-    }
-}
+});
+#[rustfmt::skip]
+impl_op_ex!(+= |a: &mut BoundingBox, b: &Point| {
+        a.top =a.top.max(b.1);
+        a.right =a.right.max(b.0);
+        a.bottom =a.bottom.min(b.1);
+        a.left =a.left.min(b.0);
+});
 impl From<(isize, isize, isize, isize)> for BoundingBox {
     fn from(value: (isize, isize, isize, isize)) -> Self {
         Self {
@@ -1091,7 +1088,7 @@ struct TextPath {
 #[pymethods]
 impl TextPath {
     #[new]
-    #[pyo3(signature = (start, end, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None))]
+    #[pyo3(signature = (start, end, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None,  bbox = None))]
     fn new(
         py: Python,
         start: Bound<PyAny>,
@@ -1105,6 +1102,7 @@ impl TextPath {
         environment: Option<Bound<'_, PyAny>>,
         barriers: Option<Bound<'_, PyAny>>,
         paths: Option<Bound<'_, PyAny>>,
+        bbox: Option<BoundingBox>,
     ) -> PyResult<Self> {
         let start = Point::extract_bound(&start)?;
         let end = Point::extract_bound(&end)?;
@@ -1119,7 +1117,7 @@ impl TextPath {
         for (position, pixel) in &paths {
             environment.insert(*position, pixel.with_weight(Some(0)));
         }
-        let mut bb = map_to_bounding_box(&environment);
+        let mut bb = bbox.unwrap_or(map_to_bounding_box(&environment));
         bb += start;
         bb += end;
         let mut heap = BinaryHeap::new();
@@ -1237,10 +1235,10 @@ impl TextPath {
             .iter()
             .map(|pos| {
                 (
-                    path_map.contains(&(pos + &Direction::Up.delta())),
-                    path_map.contains(&(pos + &Direction::Right.delta())),
-                    path_map.contains(&(pos + &Direction::Down.delta())),
-                    path_map.contains(&(pos + &Direction::Left.delta())),
+                    path_map.contains(&(pos + Direction::Up.delta())),
+                    path_map.contains(&(pos + Direction::Right.delta())),
+                    path_map.contains(&(pos + Direction::Down.delta())),
+                    path_map.contains(&(pos + Direction::Left.delta())),
                 )
             })
             .collect();
@@ -1530,7 +1528,7 @@ impl Box {
             };
             let mut row = vec![None; left_pad];
             row.extend(line.chars().map(|c| Some(c.to_string())));
-            row.extend(std::iter::repeat(None).take(right_pad));
+            row.extend(std::iter::repeat_n(None, right_pad));
             row
         };
 
@@ -1550,15 +1548,15 @@ impl Box {
         };
 
         let mut result = Vec::new();
-        result.extend(std::iter::repeat(blank_row.clone()).take(bottom_pad));
+        result.extend(std::iter::repeat_n(blank_row.clone(), bottom_pad));
         result.extend(padded_lines.into_iter().rev().collect::<Vec<_>>());
-        result.extend(std::iter::repeat(blank_row).take(top_pad));
+        result.extend(std::iter::repeat_n(blank_row, top_pad));
 
         (
             result
                 .iter()
                 .enumerate()
-                .map(|(j, chars)| {
+                .flat_map(|(j, chars)| {
                     chars
                         .iter()
                         .enumerate()
@@ -1584,8 +1582,7 @@ impl Box {
                         })
                         .collect::<Vec<Pixel>>()
                 })
-                .flatten()
-                .map(|p| ((p.position, p)))
+                .map(|p| (p.position, p))
                 .collect(),
             BoundingBox {
                 top: self.position.1 + effective_height as isize - 1,
