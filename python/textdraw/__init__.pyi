@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Literal
 from typing import Self
 
@@ -88,11 +89,9 @@ class TextPath:
         start_direction: str | None = None,
         end_direction: str | None = None,
         bend_penalty: int = 1,
-        environment: list[PixelGroup | Pixel | TextPath | Box]
-        | tuple[PixelGroup | Pixel | TextPath | Box]
-        | None = None,
-        barriers: list[PixelGroup | Pixel | TextPath | Box] | tuple[PixelGroup | Pixel | TextPath | Box] | None = None,
-        paths: list[PixelGroup | Pixel | TextPath | Box] | tuple[PixelGroup | Pixel | TextPath | Box] | None = None,
+        environment: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
+        barriers: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
+        paths: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
     ) -> Self: ...
 
 
@@ -137,4 +136,4 @@ class Box:
     ) -> Self: ...
 
 
-__all__ = ['BoundingBox', 'Box', 'PixelGroup', 'Pixel', 'Style', 'TextPath', 'arrow', 'render', 'Point']
+__all__ = ['BoundingBox', 'Box', 'Pixel', 'PixelGroup', 'Point', 'Style', 'TextPath', 'arrow', 'render']
