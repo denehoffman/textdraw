@@ -184,8 +184,7 @@ jobs:
       - name: Sign the dists with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
-          inputs: >-
-            ./dist/*.zip
+          inputs: dist/**/*.{whl,tar.gz}
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
