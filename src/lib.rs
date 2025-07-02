@@ -137,9 +137,17 @@ impl_op_ex!(+ |a: &Point, b: &Point| -> Point { Point(a.0 + b.0, a.1 + b.1) });
 #[rustfmt::skip]
 impl_op_ex!(- |a: &Point, b: &Point| -> Point { Point(a.0 - b.0, a.1 - b.1) });
 #[rustfmt::skip]
+impl_op_ex!(+= |a: &mut Point, b: &Point| { a.0 += b.0; a.1 += b.1; });
+#[rustfmt::skip]
+impl_op_ex!(-= |a: &mut Point, b: &Point| { a.0 -= b.0; a.1 -= b.1; });
+#[rustfmt::skip]
 impl_op_ex_commutative!(+ |a: &Point, b: &(isize, isize)| -> Point { Point(a.0 + b.0, a.1 + b.1) });
 #[rustfmt::skip]
 impl_op_ex_commutative!(- |a: &Point, b: &(isize, isize)| -> Point { Point(a.0 + b.0, a.1 + b.1) });
+#[rustfmt::skip]
+impl_op_ex!(+= |a: &mut Point, b: &(isize, isize)| { a.0 += b.0; a.1 += b.1; });
+#[rustfmt::skip]
+impl_op_ex!(-= |a: &mut Point, b: &(isize, isize)| { a.0 -= b.0; a.1 -= b.1; });
 
 /// Represents a rectangular bounding box with integer coordinates.
 ///
@@ -321,6 +329,14 @@ impl BoundingBox {
         }
         pixels
     }
+    fn duplicate_shifted(&self, position: Point) -> Self {
+        Self {
+            top: self.top + position.1,
+            right: self.right + position.0,
+            bottom: self.bottom + position.1,
+            left: self.left + position.0,
+        }
+    }
 }
 #[pymethods]
 impl BoundingBox {
@@ -430,6 +446,22 @@ impl BoundingBox {
     #[getter]
     fn center_right(&self) -> Point {
         Point(self.right, (self.bottom + self.top) / 2)
+    }
+    /// Duplicate a BoundingBox shifted by the given delta.
+    ///
+    /// Parameters
+    /// ----------
+    /// delta : Point or tuple of ints
+    ///     The (x, y) shift difference.
+    ///
+    /// Returns
+    /// -------
+    /// BoundingBox
+    ///     A new BoundingBox shifted by the given delta.
+    ///
+    #[pyo3(name = "duplicate_shifted")]
+    fn py_duplicate_shifted(&self, delta: Bound<PyAny>) -> PyResult<Self> {
+        Ok(self.duplicate_shifted(Point::extract_bound(&delta)?))
     }
 }
 #[rustfmt::skip]
@@ -854,25 +886,42 @@ impl Pixel {
             weight,
         })
     }
-    /// Gets a new pixel at the given position with the same style and weight.
+    /// Duplicate a Pixel at a given position.
     ///
     /// Parameters
     /// ----------
-    /// position : Point or tuple of ints
-    ///     The (x, y) coordinates of the new pixel.
+    /// position : Point or tuple of ints, optional
+    ///     The (x, y) coordinates of the new Pixel.
     ///
     /// Returns
     /// -------
     /// Pixel
-    ///     A new Pixel object at the given position.
+    ///     A new Pixel at the given position.
     ///
-    fn at(&self, position: Bound<PyAny>) -> PyResult<Self> {
-        Ok(Self {
-            character: self.character,
-            position: Point::extract_bound(&position)?,
-            style: self.style.clone(),
-            weight: self.weight,
-        })
+    #[pyo3(name = "duplicate", signature = (position = None))]
+    fn py_duplicate(&self, position: Option<Bound<PyAny>>) -> PyResult<Self> {
+        Ok(self.duplicate(
+            position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
+        ))
+    }
+    /// Duplicate a Pixel shifted by the given delta.
+    ///
+    /// Parameters
+    /// ----------
+    /// delta : Point or tuple of ints
+    ///     The (x, y) shift difference.
+    ///
+    /// Returns
+    /// -------
+    /// Pixel
+    ///     A new Pixel shifted by the given delta.
+    ///
+    #[pyo3(name = "duplicate_shifted")]
+    fn py_duplicate_shifted(&self, delta: Bound<PyAny>) -> PyResult<Self> {
+        Ok(self.duplicate_shifted(Point::extract_bound(&delta)?))
     }
     fn __str__(&self) -> PyResult<String> {
         self.render()
@@ -891,6 +940,16 @@ impl Pixel {
         let mut new_pixel = self.clone();
         new_pixel.weight = weight;
         new_pixel
+    }
+    fn duplicate(&self, position: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position = position;
+        new_obj
+    }
+    fn duplicate_shifted(&self, delta: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position += delta;
+        new_obj
     }
 }
 
@@ -963,25 +1022,54 @@ impl PixelGroup {
     fn bbox(&self) -> BoundingBox {
         pixels_to_bounding_box(&self.pixels)
     }
-    /// Get a new PixelGroup with the same pixels but an updated position.
+    /// Duplicate a PixelGroup at a given position.
     ///
     /// Parameters
     /// ----------
-    /// position : Point or tuple of ints
-    ///     The new position of the PixelGroup.
+    /// position : Point or tuple of ints, optional
+    ///     The (x, y) coordinates of the new PixelGroup.
     ///
     /// Returns
     /// -------
     /// PixelGroup
-    ///     A new PixelGroup with the same pixels but an updated position.
+    ///     A new PixelGroup at the given position.
     ///
-    fn at(&self, position: Bound<PyAny>) -> PyResult<Self> {
-        Ok(Self {
-            pixels: self.pixels.clone(),
-            position: Point::extract_bound(&position)?,
-            style: self.style.clone(),
-            weight: self.weight,
-        })
+    #[pyo3(name = "duplicate", signature = (position = None))]
+    fn py_duplicate(&self, position: Option<Bound<PyAny>>) -> PyResult<Self> {
+        Ok(self.duplicate(
+            position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
+        ))
+    }
+    /// Duplicate a PixelGroup shifted by the given delta.
+    ///
+    /// Parameters
+    /// ----------
+    /// delta : Point or tuple of ints
+    ///     The (x, y) shift difference.
+    ///
+    /// Returns
+    /// -------
+    /// PixelGroup
+    ///     A new PixelGroup shifted by the given delta.
+    ///
+    #[pyo3(name = "duplicate_shifted")]
+    fn py_duplicate_shifted(&self, delta: Bound<PyAny>) -> PyResult<Self> {
+        Ok(self.duplicate_shifted(Point::extract_bound(&delta)?))
+    }
+}
+impl PixelGroup {
+    fn duplicate(&self, position: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position = position;
+        new_obj
+    }
+    fn duplicate_shifted(&self, delta: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position += delta;
+        new_obj
     }
 }
 
@@ -1135,8 +1223,6 @@ fn pixels_to_bounding_box(pixels: &[Pixel]) -> BoundingBox {
 /// ----------
 /// objects : list
 ///     A list of objects to render. Each object must be an instance of TextPath, Box, Pixel, or PixelGroup.
-/// default_style : str, optional
-///     The default style to use for empty spaces.
 ///
 /// Returns
 /// -------
@@ -1171,6 +1257,125 @@ fn render(args: &Bound<'_, PyTuple>) -> PyResult<String> {
         output.push('\n')
     }
     Ok(output)
+}
+/// Takes a list of objects (TextPath, Box, Pixel, or PixelGroup) and duplicates them shifted by a
+/// given delta amount.
+///
+/// Parameters
+/// ----------
+/// objects : list
+///     A list of objects to duplicate. Each object must be an instance of TextPath, Box, Pixel, or PixelGroup.
+/// delta : Point or tuple of ints, optional
+///     The (x, y) shift difference.
+///
+/// Returns
+/// -------
+/// objects : list
+///     Duplicated objects shifted by the given delta.
+///
+/// Raises
+/// ------
+/// TypeError
+///     If an object in the list is not a TextPath, Box, Pixel, or PixelGroup.
+///
+#[pyfunction]
+fn duplicate_shifted<'py>(
+    py: Python<'py>,
+    objects: Vec<Bound<'py, PyAny>>,
+    delta: Bound<PyAny>,
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let mut res = Vec::with_capacity(objects.len());
+    for obj in objects {
+        if let Ok(obj) = obj.extract::<Pixel>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate_shifted(delta.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else if let Ok(obj) = obj.extract::<PixelGroup>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate_shifted(delta.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else if let Ok(obj) = obj.extract::<TextPath>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate_shifted(delta.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else if let Ok(obj) = obj.extract::<Box>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate_shifted(delta.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else {
+            return Err(PyTypeError::new_err(
+                "Expected objects to be a list of Pixels, PixelGroups, TextPaths, and/or Boxes",
+            ));
+        }
+    }
+    Ok(res)
+}
+
+/// Takes a list of objects (TextPath, Box, Pixel, or PixelGroup) and duplicates them at a new
+/// location.
+///
+/// Parameters
+/// ----------
+/// objects : list
+///     A list of objects to duplicate. Each object must be an instance of TextPath, Box, Pixel, or PixelGroup.
+///
+/// Returns
+/// -------
+/// objects : list
+///     Duplicated objects at the specified location.
+///
+/// Raises
+/// ------
+/// TypeError
+///     If an object in the list is not a TextPath, Box, Pixel, or PixelGroup.
+///
+#[pyfunction]
+fn duplicate<'py>(
+    py: Python<'py>,
+    objects: Vec<Bound<'py, PyAny>>,
+    position: Option<Bound<PyAny>>,
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let mut res = Vec::with_capacity(objects.len());
+    for obj in objects {
+        if let Ok(obj) = obj.extract::<Pixel>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate(position.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else if let Ok(obj) = obj.extract::<PixelGroup>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate(position.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else if let Ok(obj) = obj.extract::<TextPath>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate(position.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else if let Ok(obj) = obj.extract::<Box>() {
+            res.push(
+                Bound::new(py, obj.py_duplicate(position.clone())?)?
+                    .as_any()
+                    .clone(),
+            );
+        } else {
+            return Err(PyTypeError::new_err(
+                "Expected objects to be a list of Pixels, PixelGroups, TextPaths, and/or Boxes",
+            ));
+        }
+    }
+    Ok(res)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -1436,6 +1641,8 @@ impl PartialOrd for State {
 ///     The starting point of the path.
 /// end : Point or tuple of ints
 ///     The ending point of the path.
+/// position : Point or tuple of ints, optional
+///     The (x, y) coordinates of the new TextPath.
 /// style : str, optional
 ///     The style to apply to the path.
 /// line_style : {'regular', 'thick', 'double'}, optional
@@ -1493,6 +1700,8 @@ impl PartialOrd for State {
 struct TextPath {
     path: Vec<Point>,
     #[pyo3(get, set)]
+    position: Point,
+    #[pyo3(get, set)]
     style: TextStyle,
     line_style: LineStyle,
     #[pyo3(get, set)]
@@ -1509,11 +1718,12 @@ struct TextPath {
 #[pymethods]
 impl TextPath {
     #[new]
-    #[pyo3(signature = (start, end, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None))]
+    #[pyo3(signature = (start, end, position = None, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None))]
     fn new(
         py: Python,
         start: Bound<PyAny>,
         end: Bound<PyAny>,
+        position: Option<Bound<PyAny>>,
         style: Option<String>,
         line_style: String,
         weight: Option<usize>,
@@ -1551,6 +1761,7 @@ impl TextPath {
         TextPath::calculate_path(
             start,
             end,
+            position.map(|p| Point::extract_bound(&p)).transpose()?,
             style,
             line_style,
             weight,
@@ -1600,11 +1811,59 @@ impl TextPath {
         }
         bbox
     }
+    /// Duplicate a TextPath at a given position.
+    ///
+    /// Parameters
+    /// ----------
+    /// position : Point or tuple of ints, optional
+    ///     The (x, y) coordinates of the new TextPath.
+    ///
+    /// Returns
+    /// -------
+    /// TextPath
+    ///     A new TextPath at the given position.
+    ///
+    #[pyo3(name = "duplicate", signature = (position = None))]
+    fn py_duplicate(&self, position: Option<Bound<PyAny>>) -> PyResult<Self> {
+        Ok(self.duplicate(
+            position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
+        ))
+    }
+    /// Duplicate a TextPath shifted by the given delta.
+    ///
+    /// Parameters
+    /// ----------
+    /// delta : Point or tuple of ints
+    ///     The (x, y) shift difference.
+    ///
+    /// Returns
+    /// -------
+    /// TextPath
+    ///     A new TextPath shifted by the given delta.
+    ///
+    #[pyo3(name = "duplicate_shifted")]
+    fn py_duplicate_shifted(&self, delta: Bound<PyAny>) -> PyResult<Self> {
+        Ok(self.duplicate_shifted(Point::extract_bound(&delta)?))
+    }
 }
 impl TextPath {
+    fn duplicate(&self, position: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position = position;
+        new_obj
+    }
+    fn duplicate_shifted(&self, delta: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position += delta;
+        new_obj
+    }
     fn calculate_path(
         start: Point,
         end: Point,
+        position: Option<Point>,
         style: Option<String>,
         line_style: String,
         weight: Option<usize>,
@@ -1617,11 +1876,11 @@ impl TextPath {
         bbox: Option<BoundingBox>,
     ) -> PyResult<Self> {
         let mut environment = environment.clone();
-        for (position, pixel) in barriers {
-            environment.insert(*position, pixel.with_weight(None));
+        for (pos, pixel) in barriers {
+            environment.insert(*pos, pixel.with_weight(None));
         }
-        for (position, pixel) in paths {
-            environment.insert(*position, pixel.with_weight(Some(0)));
+        for (pos, pixel) in paths {
+            environment.insert(*pos, pixel.with_weight(Some(0)));
         }
         let mut bb = bbox.unwrap_or(map_to_bounding_box(&environment));
         bb += start;
@@ -1647,6 +1906,7 @@ impl TextPath {
                 path.reverse();
                 return Ok(Self {
                     path,
+                    position: position.unwrap_or_default(),
                     style: style.unwrap_or_default().parse()?,
                     line_style: line_style.parse()?,
                     weight,
@@ -1731,7 +1991,7 @@ impl TextPath {
             .collect();
         Ok(PixelGroup {
             pixels,
-            position: Point::default(),
+            position: self.position,
             style: TextStyle::default(),
             weight: Some(0),
         })
@@ -1774,11 +2034,12 @@ impl TextPath {
 ///     If True, iterate through all permutations of path orderings to minimize total cost.
 ///
 #[pyfunction]
-#[pyo3(signature = (starts, ends, style = None, *, line_style = "regular".to_string(), weight = None, start_directions = None, end_directions = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None, optimize = false))]
+#[pyo3(signature = (starts, ends, position = None, style = None, *, line_style = "regular".to_string(), weight = None, start_directions = None, end_directions = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None, optimize = false))]
 fn multipath(
     py: Python,
     starts: Bound<PyAny>,
     ends: Bound<PyAny>,
+    position: Option<Bound<PyAny>>,
     style: Option<String>,
     line_style: String,
     weight: Option<usize>,
@@ -1806,6 +2067,7 @@ fn multipath(
             "The number of start and end points must be equal",
         ));
     }
+    let position = position.map(|p| Point::extract_bound(&p)).transpose()?;
     let start_directions = start_directions.unwrap_or(vec![None; starts.len()]);
     if starts.len() != start_directions.len() {
         return Err(PyValueError::new_err(
@@ -1868,6 +2130,7 @@ fn multipath(
             let textpath = TextPath::calculate_path(
                 starts[i],
                 ends[i],
+                position,
                 style.clone(),
                 line_style.clone(),
                 weight,
@@ -2060,7 +2323,7 @@ struct Box {
 #[pymethods]
 impl Box {
     #[new]
-    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, *, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = (0, 1, 0, 1), padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
+    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, *, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = None, padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
     fn new(
         text: &str,
         position: Option<Bound<PyAny>>,
@@ -2148,32 +2411,66 @@ impl Box {
     }
     #[getter]
     fn get_bbox(&self) -> BoundingBox {
-        let padding = self.padding.unwrap_or_default();
-        let (total_width, total_height) = if let (Some(w), Some(h)) = (self.width, self.height) {
-            (w, h)
-        } else {
-            let (_, bb_text) = self.format_text();
-            let width = self
-                .width
-                .unwrap_or_else(|| bb_text.width() as usize + padding.1 + padding.3 + 2);
-            let height = self
-                .height
-                .unwrap_or_else(|| bb_text.height() as usize + padding.0 + padding.2 + 2);
-            (width, height)
-        };
-
-        BoundingBox::new(
-            self.position.1 + total_height as isize - 1,
-            self.position.0 + total_width as isize - 1,
-            self.position.1,
-            self.position.0,
-        )
+        let (_, bbox) = self.format_box();
+        bbox
+    }
+    #[getter]
+    fn get_text_bbox(&self) -> BoundingBox {
+        let (_, bbox) = self.format_text();
+        bbox
+    }
+    /// Duplicate a Box at a given position.
+    ///
+    /// Parameters
+    /// ----------
+    /// position : Point or tuple of ints, optional
+    ///     The (x, y) coordinates of the new Box.
+    ///
+    /// Returns
+    /// -------
+    /// Box
+    ///     A new Box at the given position.
+    ///
+    #[pyo3(name = "duplicate", signature = (position = None))]
+    fn py_duplicate(&self, position: Option<Bound<PyAny>>) -> PyResult<Self> {
+        Ok(self.duplicate(
+            position
+                .map(|p| Point::extract_bound(&p))
+                .transpose()?
+                .unwrap_or_default(),
+        ))
+    }
+    /// Duplicate a Box shifted by the given delta.
+    ///
+    /// Parameters
+    /// ----------
+    /// delta : Point or tuple of ints
+    ///     The (x, y) shift difference.
+    ///
+    /// Returns
+    /// -------
+    /// Box
+    ///     A new Box shifted by the given delta.
+    ///
+    #[pyo3(name = "duplicate_shifted")]
+    fn py_duplicate_shifted(&self, delta: Bound<PyAny>) -> PyResult<Self> {
+        Ok(self.duplicate_shifted(Point::extract_bound(&delta)?))
     }
 }
 impl Box {
-    fn as_group(&self) -> PixelGroup {
-        let (text_pixels, bb_text) = self.format_text();
+    fn duplicate(&self, position: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position = position;
+        new_obj
+    }
+    fn duplicate_shifted(&self, delta: Point) -> Self {
+        let mut new_obj = self.clone();
+        new_obj.position += delta;
+        new_obj
+    }
+    fn format_box(&self) -> (HashMap<Point, Pixel>, BoundingBox) {
         let padding = self.padding.unwrap_or_default();
+        let (text, bb_text) = self.format_text();
         let (total_width, total_height) = if let (Some(w), Some(h)) = (self.width, self.height) {
             (w, h)
         } else {
@@ -2185,7 +2482,6 @@ impl Box {
                 .unwrap_or_else(|| bb_text.height() as usize + padding.0 + padding.2 + 2);
             (width, height)
         };
-
         let bb_border = BoundingBox::new(
             self.position.1 + total_height as isize - 1,
             self.position.0 + total_width as isize - 1,
@@ -2199,9 +2495,12 @@ impl Box {
             self.weight,
             self.transparent_padding,
         );
-        pixels.extend(text_pixels);
+        pixels.extend(text);
+        (pixels, bb_border)
+    }
+    fn as_group(&self) -> PixelGroup {
         PixelGroup {
-            pixels: pixels.values().cloned().collect(),
+            pixels: self.format_box().0.into_values().collect(),
             position: Point::default(),
             style: TextStyle::default(),
             weight: self.weight,
@@ -2239,6 +2538,7 @@ impl Box {
             }
         }
 
+        // This doesn't seem necessary
         let effective_width = if self.width.is_some() {
             content_width
         } else {
@@ -2248,7 +2548,7 @@ impl Box {
         let effective_height = if let Some(total_height) = self.height {
             total_height.saturating_sub(2 + padding.0 + padding.2)
         } else {
-            raw_lines.len().max(1)
+            raw_lines.len().max(0)
         };
 
         if raw_lines.len() > effective_height {
@@ -2329,8 +2629,8 @@ impl Box {
                 .map(|p| (p.position, p))
                 .collect(),
             BoundingBox {
-                top: text_start_y + effective_height as isize - 1,
-                right: text_start_x + effective_width as isize - 1,
+                top: text_start_y + effective_height as isize,
+                right: text_start_x + effective_width as isize,
                 bottom: text_start_y,
                 left: text_start_x,
             },
@@ -2348,6 +2648,7 @@ fn textdraw(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(arrow, m)?)?;
     m.add_function(wrap_pyfunction!(text, m)?)?;
     m.add_function(wrap_pyfunction!(multipath, m)?)?;
+    m.add_function(wrap_pyfunction!(duplicate_shifted, m)?)?;
     m.add_class::<TextPath>()?;
     m.add_class::<Box>()?;
     m.add_class::<Point>()?;

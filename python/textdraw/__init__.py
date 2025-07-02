@@ -1,4 +1,17 @@
-from .textdraw import BoundingBox, Box, Pixel, PixelGroup, Point, Style, TextPath, arrow, multipath, render, text
+from .textdraw import (
+    BoundingBox,
+    Box,
+    Pixel,
+    PixelGroup,
+    Point,
+    Style,
+    TextPath,
+    arrow,
+    duplicate_shifted,
+    multipath,
+    render,
+    text,
+)
 
 __all__ = [
     'BoundingBox',
@@ -9,6 +22,7 @@ __all__ = [
     'Style',
     'TextPath',
     'arrow',
+    'duplicate_shifted',
     'multipath',
     'render',
     'text',

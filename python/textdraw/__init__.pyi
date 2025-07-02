@@ -38,6 +38,7 @@ class BoundingBox:
     def height(self) -> int: ...
     @staticmethod
     def wrap(*args: PixelGroup | Pixel | TextPath | Box) -> Self: ...
+    def duplicate_shifted(self, position: Point | tuple[int, int]) -> Self: ...
 
 
 class PixelGroup:
@@ -53,11 +54,12 @@ class PixelGroup:
         style: str | None = None,
         weight: int | None = None,
     ): ...
-    def at(self, position: Point | tuple[int, int]) -> Self: ...
     def __getitem__(self, index: int) -> Pixel: ...
     def __setitem__(self, index: int, pixel: Pixel) -> None: ...
     @property
     def bbox(self) -> BoundingBox: ...
+    def duplicate(self, position: Point | tuple[int, int] | None = None) -> Self: ...
+    def duplicate_shifted(self, position: Point | tuple[int, int]) -> Self: ...
 
 
 class Pixel:
@@ -74,7 +76,8 @@ class Pixel:
         *,
         weight: int | None = None,
     ): ...
-    def at(self, position: Point | tuple[int, int]) -> Self: ...
+    def duplicate(self, position: Point | tuple[int, int] | None = None) -> Self: ...
+    def duplicate_shifted(self, position: Point | tuple[int, int]) -> Self: ...
 
 
 class Style:
@@ -89,9 +92,13 @@ class Style:
 
 
 def render(*args: PixelGroup | Pixel | TextPath | Box) -> str: ...
+def duplicate_shifted(
+    objs: Sequence[PixelGroup | Pixel | TextPath | Box], delta: Point | tuple[int, int]
+) -> list[PixelGroup | Pixel | TextPath | Box]: ...
 
 
 class TextPath:
+    position: Point
     style: Style
     line_style: Literal['regular', 'double', 'thick']
     weight: int | None
@@ -102,6 +109,7 @@ class TextPath:
         self,
         start: Point | tuple[int, int],
         end: Point | tuple[int, int],
+        position: Point | tuple[int, int] | None = None,
         style: str | None = None,
         *,
         line_style: Literal['regular', 'double', 'thick'] = 'regular',
@@ -118,11 +126,14 @@ class TextPath:
     def cost(self) -> int: ...
     @property
     def bbox(self) -> BoundingBox: ...
+    def duplicate(self, position: Point | tuple[int, int] | None = None) -> Self: ...
+    def duplicate_shifted(self, position: Point | tuple[int, int]) -> Self: ...
 
 
 def multipath(
     starts: Sequence[Point | tuple[int, int]],
     ends: Sequence[Point | tuple[int, int]],
+    position: Point | tuple[int, int] | None = None,
     style: str | None = None,
     *,
     line_style: Literal['regular', 'double', 'thick'] = 'regular',
@@ -172,7 +183,7 @@ class Box:
         border_style: str | None = None,
         line_style: Literal['regular', 'double', 'thick'] | None = 'regular',
         weight: int | None = 1,
-        padding: tuple[int, int, int, int] | None = (0, 1, 0, 1),
+        padding: tuple[int, int, int, int] | None = None,
         padding_style: str | None = None,
         align: Literal['top', 'center', 'bottom'] = 'top',
         justify: Literal['right', 'center', 'left'] = 'left',
@@ -182,6 +193,10 @@ class Box:
     ) -> Self: ...
     @property
     def bbox(self) -> BoundingBox: ...
+    @property
+    def text_bbox(self) -> BoundingBox: ...
+    def duplicate(self, position: Point | tuple[int, int] | None = None) -> Self: ...
+    def duplicate_shifted(self, position: Point | tuple[int, int]) -> Self: ...
 
 
 __all__ = [
@@ -193,6 +208,7 @@ __all__ = [
     'Style',
     'TextPath',
     'arrow',
+    'duplicate_shifted',
     'multipath',
     'render',
     'text',
