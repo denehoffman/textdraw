@@ -1,6 +1,5 @@
 from collections.abc import Sequence
-from typing import Literal
-from typing import Self
+from typing import Literal, Self
 
 
 class Point:
@@ -57,6 +56,8 @@ class PixelGroup:
     def at(self, position: Point | tuple[int, int]) -> Self: ...
     def __getitem__(self, index: int) -> Pixel: ...
     def __setitem__(self, index: int, pixel: Pixel) -> None: ...
+    @property
+    def bbox(self) -> BoundingBox: ...
 
 
 class Pixel:
@@ -80,6 +81,11 @@ class Style:
     def __init__(self, style: str): ...
     def __add__(self, other: str | Self) -> Self: ...
     def __call__(self, text: str) -> str: ...
+    @property
+    def effects(self) -> set[str]: ...
+    @property
+    def fg(self) -> str: ...
+    def bg(self) -> str: ...
 
 
 def render(*args: PixelGroup | Pixel | TextPath | Box) -> str: ...
@@ -87,10 +93,10 @@ def render(*args: PixelGroup | Pixel | TextPath | Box) -> str: ...
 
 class TextPath:
     style: Style
-    line_style: str
+    line_style: Literal['regular', 'double', 'thick']
     weight: int | None
-    start_direction: str | None
-    end_direction: str | None
+    start_direction: Literal['up', 'right', 'down', 'left'] | None
+    end_direction: Literal['up', 'right', 'down', 'left'] | None
 
     def __init__(
         self,
@@ -100,17 +106,20 @@ class TextPath:
         *,
         line_style: Literal['regular', 'double', 'thick'] = 'regular',
         weight: int | None = None,
-        start_direction: str | None = None,
-        end_direction: str | None = None,
+        start_direction: Literal['up', 'right', 'down', 'left'] | None = None,
+        end_direction: Literal['up', 'right', 'down', 'left'] | None = None,
         bend_penalty: int = 1,
         environment: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
         barriers: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
         paths: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
-        bbox: BoundingBox | None = None,
+        bbox: BoundingBox | tuple[int, int, int, int] | None = None,
     ) -> Self: ...
 
 
-def arrow(kind: str) -> str: ...
+def arrow(fmt: str) -> str: ...
+def text(
+    text: str, position: Point | tuple[int, int] | None = None, style: str | None = None, weight: int | None = None
+) -> str: ...
 
 
 class Box:
@@ -129,7 +138,6 @@ class Box:
     truncate_string: str | None
     transparent: bool
     transparent_padding: bool
-    bbox: BoundingBox
 
     def __init__(
         self,
@@ -138,6 +146,7 @@ class Box:
         width: int = 0,
         height: int = 0,
         style: str | None = None,
+        *,
         border_style: str | None = None,
         line_style: Literal['regular', 'double', 'thick'] | None = 'regular',
         weight: int | None = 1,
@@ -149,6 +158,8 @@ class Box:
         transparent: bool = False,
         transparent_padding: bool = False,
     ) -> Self: ...
+    @property
+    def bbox(self) -> BoundingBox: ...
 
 
-__all__ = ['BoundingBox', 'Box', 'Pixel', 'PixelGroup', 'Point', 'Style', 'TextPath', 'arrow', 'render']
+__all__ = ['BoundingBox', 'Box', 'Pixel', 'PixelGroup', 'Point', 'Style', 'TextPath', 'arrow', 'render', 'text']

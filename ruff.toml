@@ -50,3 +50,6 @@ ignore = [
 [format]
 quote-style = "single"
 indent-style = "space"
+
+[lint.pydocstyle]
+convention = "numpy"

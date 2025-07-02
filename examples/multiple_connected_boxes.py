@@ -14,10 +14,7 @@ coords = {}
 for label, (x, y) in boxes.items():
     box = Box(label, (x, y), border_style='bold white', style='bold', line_style='thick')
     objs.append(box)
-    coords[label] = (
-        box.bbox.left + box.bbox.width // 2,
-        box.bbox.bottom + box.bbox.height // 2,
-    )
+    coords[label] = box.bbox.center
 
 paths = [
     ('A', 'B', 'red'),

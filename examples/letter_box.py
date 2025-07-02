@@ -1,39 +1,24 @@
-from textdraw import Box, Pixel, PixelGroup, TextPath, render
+from textdraw import BoundingBox, Box, Pixel, PixelGroup, Point, TextPath, render
 
 
 class LetterBox:
     def __init__(self, letter: str, x: int, y: int):
         self.box = Box(letter, (x, y))
-        self.c_left = (self.box.bbox.left - 1, self.box.bbox.bottom + self.box.bbox.height // 2)
-        self.c_right = (
-            self.box.bbox.right + 1,
-            self.box.bbox.bottom + self.box.bbox.height // 2,
-        )
-        self.c_top = (self.box.bbox.left + self.box.bbox.width // 2, self.box.bbox.top + 1)
-        self.c_bottom = (
-            self.box.bbox.left + self.box.bbox.width // 2,
-            self.box.bbox.bottom - 1,
-        )
-        marker = Pixel('⎚', style='green', weight=1)
-        self.margin_markers = PixelGroup(
-            [
-                marker.at((self.c_left[0] - 2, self.c_left[1])),
-                marker.at((self.c_right[0] + 2, self.c_right[1])),
-                marker.at((self.c_top[0], self.c_top[1] + 2)),
-                marker.at((self.c_bottom[0], self.c_bottom[1] - 2)),
-            ]
-        )
+        self.c_right = self.box.bbox.center_right + Point(1, 0)
+        self.c_left = self.box.bbox.center_left - Point(1, 0)
+        self.c_top = self.box.bbox.top_center + Point(0, 1)
+        self.c_bottom = self.box.bbox.bottom_center - Point(0, 1)
         barrier = Pixel('⎚', style='red', weight=None)
         self.barriers = PixelGroup(
             [
-                barrier.at((self.c_left[0], self.c_left[1] - 1)),
-                barrier.at((self.c_left[0], self.c_left[1] + 1)),
-                barrier.at((self.c_right[0], self.c_right[1] - 1)),
-                barrier.at((self.c_right[0], self.c_right[1] + 1)),
-                barrier.at((self.c_top[0] - 1, self.c_top[1])),
-                barrier.at((self.c_top[0] + 1, self.c_top[1])),
-                barrier.at((self.c_bottom[0] - 1, self.c_bottom[1])),
-                barrier.at((self.c_bottom[0] + 1, self.c_bottom[1])),
+                barrier.at(self.c_left - Point(0, 1)),
+                barrier.at(self.c_left + Point(0, 1)),
+                barrier.at(self.c_right - Point(0, 1)),
+                barrier.at(self.c_right + Point(0, 1)),
+                barrier.at(self.c_bottom - Point(1, 0)),
+                barrier.at(self.c_bottom + Point(1, 0)),
+                barrier.at(self.c_top - Point(1, 0)),
+                barrier.at(self.c_top + Point(1, 0)),
             ]
         )
 
@@ -42,9 +27,13 @@ if __name__ == '__main__':
     a = LetterBox('a', 0, 0)
     b = LetterBox('b', 20, -8)
     c = LetterBox('c', 3, -10)
+    bbox = BoundingBox.wrap(a.box, b.box, c.box)
+    bbox.top += 3
+    bbox.bottom -= 3
+    bbox.left -= 3
+    bbox.right += 3
 
     all_barriers = [a.barriers, b.barriers, c.barriers, a.box, b.box, c.box]
-    all_markers = [a.margin_markers, b.margin_markers, c.margin_markers]
     paths = []
     paths.append(
         TextPath(
@@ -53,8 +42,9 @@ if __name__ == '__main__':
             style='dimmed',
             weight=20,
             bend_penalty=20,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     )
     paths.append(
@@ -64,8 +54,9 @@ if __name__ == '__main__':
             style='green',
             weight=20,
             bend_penalty=20,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     )
 
@@ -76,8 +67,9 @@ if __name__ == '__main__':
             style='blue',
             weight=20,
             bend_penalty=20,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     )
 
@@ -89,8 +81,9 @@ if __name__ == '__main__':
             line_style='double',
             weight=20,
             bend_penalty=20,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     )
     shared_paths = [
@@ -100,8 +93,9 @@ if __name__ == '__main__':
             style='yellow',
             line_style='thick',
             bend_penalty=20,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     ]
     shared_paths.append(
@@ -112,8 +106,9 @@ if __name__ == '__main__':
             line_style='thick',
             bend_penalty=20,
             paths=shared_paths,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     )
     shared_paths.append(
@@ -124,14 +119,9 @@ if __name__ == '__main__':
             line_style='thick',
             bend_penalty=20,
             paths=shared_paths,
-            environment=[*all_markers, *paths],
+            environment=paths,
             barriers=all_barriers,
+            bbox=bbox,
         )
     )
     print(render(a.box, b.box, c.box, *paths, *shared_paths))
-
-    blinking_shared_paths = []
-    for path in shared_paths:
-        path.style += 'blink'
-        blinking_shared_paths.append(path)
-    print(render(a.box, b.box, c.box, *paths, *blinking_shared_paths))

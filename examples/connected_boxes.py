@@ -1,16 +1,16 @@
-from textdraw import Box, Pixel, TextPath, render
+from textdraw import Box, Pixel, TextPath, render, Point
 
 if __name__ == '__main__':
     a = Box('A', (-20, 10), border_style='green')
     b = Box('B', (0, 0), border_style='red')
     print(a.bbox)
-    start_node = Pixel('', (a.bbox.right + 1, a.bbox.bottom), style='red')
-    end_node = Pixel('◼', (b.bbox.left - 1, b.bbox.top), style='green')
+    start_node = Pixel('', a.bbox.bottom_right + Point(1, 0), style='red')
+    end_node = Pixel('◼', b.bbox.top_left - Point(1, 0), style='green')
     path = TextPath(
-        (a.bbox.right + 1, a.bbox.bottom - 1),
-        (b.bbox.left - 2, b.bbox.top),
+        a.bbox.bottom_right + Point(1, -1),
+        b.bbox.top_left - Point(2, 0),
         style='dimmed',
-        start_direction='down',
+        start_direction='up',
         end_direction='right',
         bend_penalty=20,
     )

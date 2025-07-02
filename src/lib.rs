@@ -17,6 +17,32 @@ use pyo3::{
 };
 use regex::Regex;
 
+/// Represents a 2D point with integer coordinates.
+///
+/// Parameters
+/// ----------
+/// x : int
+///     The x-coordinate of the point.
+/// y : int
+///     The y-coordinate of the point.
+///
+/// Attributes
+/// ----------
+/// x : int
+///     The x-coordinate of the point.
+/// y : int
+///     The y-coordinate of the point.
+///
+/// Examples
+/// --------
+/// >>> p = Point(1, 2)
+/// >>> p.x
+/// 1
+/// >>> p.y
+/// 2
+/// >>> p + Point(3, 4)
+/// (4, 6)
+///
 #[pyclass]
 #[derive(Default, Clone, Copy, Eq, PartialEq, Hash)]
 struct Point(isize, isize);
@@ -52,6 +78,25 @@ impl Point {
     fn __str__(&self) -> String {
         self.to_string()
     }
+    /// Calculates the midpoint between this point and another point.
+    ///
+    /// Parameters
+    /// ----------
+    /// other : Point
+    ///     The other point.
+    ///
+    /// Returns
+    /// -------
+    /// Point
+    ///     The midpoint.
+    ///
+    /// Examples
+    /// --------
+    /// >>> p1 = Point(0, 0)
+    /// >>> p2 = Point(2, 2)
+    /// >>> p1.midpoint(p2)
+    /// (1, 1)
+    ///
     #[pyo3(name = "midpoint")]
     fn py_midpoint(&self, other: Bound<PyAny>) -> PyResult<Point> {
         Ok(self.midpoint(&Point::extract_bound(&other)?))
@@ -95,6 +140,62 @@ impl_op_ex_commutative!(+ |a: &Point, b: &(isize, isize)| -> Point { Point(a.0 +
 #[rustfmt::skip]
 impl_op_ex_commutative!(- |a: &Point, b: &(isize, isize)| -> Point { Point(a.0 + b.0, a.1 + b.1) });
 
+/// Represents a rectangular bounding box with integer coordinates.
+///
+/// Parameters
+/// ----------
+/// top : int
+///     The top y-coordinate of the bounding box.
+/// right : int
+///     The right x-coordinate of the bounding box.
+/// bottom : int
+///     The bottom y-coordinate of the bounding box.
+/// left : int
+///     The left x-coordinate of the bounding box.
+///
+/// Attributes
+/// ----------
+/// top : int
+///     The top y-coordinate.
+/// right : int
+///     The right x-coordinate.
+/// bottom : int
+///     The bottom y-coordinate.
+/// left : int
+///     The left x-coordinate.
+/// width : int
+///     The width of the bounding box.
+/// height : int
+///     The height of the bounding box.
+/// center : Point
+///     The center point of the bounding box.
+/// top_left : Point
+///     The top-left corner point.
+/// top_center : Point
+///     The top-center point.
+/// top_right : Point
+///     The top-right corner point.
+/// bottom_left : Point
+///     The bottom-left corner point.
+/// bottom_center : Point
+///     The bottom-center point.
+/// bottom_right : Point
+///     The bottom-right corner point.
+/// center_left : Point
+///     The center-left point.
+/// center_right : Point
+///     The center-right point.
+///
+/// Examples
+/// --------
+/// >>> bbox = BoundingBox(top=10, right=20, bottom=0, left=0)
+/// >>> bbox.width
+/// 20
+/// >>> bbox.height
+/// 10
+/// >>> bbox.center
+/// (10, 5)
+///
 #[pyclass]
 #[derive(Default, Copy, Clone, Debug)]
 struct BoundingBox {
@@ -231,6 +332,25 @@ impl BoundingBox {
             left,
         }
     }
+    /// Creates a BoundingBox that wraps around a collection of objects.
+    ///
+    /// Parameters
+    /// ----------
+    /// *args : tuple
+    ///     A variable number of objects (Points or other BoundingBoxes) to wrap.
+    ///
+    /// Returns
+    /// -------
+    /// BoundingBox
+    ///     A new BoundingBox that encompasses all provided objects.
+    ///
+    /// Examples
+    /// --------
+    /// >>> BoundingBox.wrap(Point(0,0), Point(10,10))
+    /// BoundingBox(top=10, right=10, bottom=0, left=0)
+    /// >>> BoundingBox.wrap(BoundingBox(0,0,0,0), BoundingBox(10,10,10,10))
+    /// BoundingBox(top=10, right=10, bottom=0, left=0)
+    ///
     #[staticmethod]
     #[pyo3(signature = (*args))]
     fn wrap(args: &Bound<'_, PyTuple>) -> PyResult<BoundingBox> {
@@ -486,6 +606,36 @@ impl Display for Color {
         )
     }
 }
+/// Represents a text style with foreground and background colors and text effects.
+///
+/// Parameters
+/// ----------
+/// s : str
+///     A string representation of the style. Can include color names (e.g., "red", "blue",
+///     "bright_green"), hex color codes (e.g., "#RRGGBB"), and effects (e.g., "bold", "italic",
+///     "underline"). Effects and colors can be combined (e.g., "bold red on blue",
+///     "underline #FF00FF").
+///
+/// Attributes
+/// ----------
+/// effects : set of str
+///     A set of strings representing the active text effects (e.g., "bold", "italic").
+/// fg : str
+///     The foreground color of the text.
+/// bg : str
+///     The background color of the text.
+///
+/// Examples
+/// --------
+/// >>> style = Style("bold red on blue")
+/// >>> style("Hello")
+/// '\x1b[1m\x1b[31m\x1b[44mHello\x1b[49m\x1b[39m\x1b[22m'
+/// >>> style = Style("#FF00FF underline")
+/// >>> style.fg
+/// '#FF00FF'
+/// >>> style.effects
+/// {'underline'}
+///
 #[pyclass(name = "Style")]
 #[derive(Default, Clone, Debug)]
 struct TextStyle {
@@ -502,6 +652,7 @@ impl TextStyle {
     fn __add__(&self, obj: Bound<PyAny>) -> PyResult<Self> {
         Ok(self.clone() + obj.try_into()?)
     }
+    /// TODO:
     fn __call__(&self, text: &str) -> PyResult<String> {
         self.render(text)
     }
@@ -516,6 +667,18 @@ impl TextStyle {
                 .collect::<Vec<String>>()
                 .join(", ")
         )
+    }
+    #[getter]
+    fn get_effects(&self) -> HashSet<String> {
+        self.effects.clone()
+    }
+    #[getter]
+    fn get_fg(&self) -> String {
+        self.fg.to_string()
+    }
+    #[getter]
+    fn get_bg(&self) -> String {
+        self.bg.to_string()
     }
 }
 impl TextStyle {
@@ -628,6 +791,36 @@ impl FromStr for TextStyle {
     }
 }
 
+/// Represents a single character pixel with a position, style, and weight.
+///
+/// Parameters
+/// ----------
+/// character : str
+///     The character to display for the pixel.
+/// position : Point or tuple of ints, optional
+///     The (x, y) coordinates of the pixel.
+/// style : str, optional
+///     The style (colors, effects) to apply to the character.
+/// weight : int, optional
+///     An optional weight for the pixel, used for rendering order.
+///
+/// Attributes
+/// ----------
+/// character : str
+///     The character of the pixel.
+/// position : Point
+///     The position of the pixel.
+/// style : TextStyle
+///     The style of the pixel.
+/// weight : int or None
+///     The weight of the pixel.
+///
+/// Examples
+/// --------
+/// >>> pixel = Pixel('A', position=(0, 0), style='red')
+/// >>> pixel.character
+/// 'A'
+///
 #[pyclass]
 #[derive(Clone, Debug)]
 struct Pixel {
@@ -660,6 +853,18 @@ impl Pixel {
             weight,
         })
     }
+    /// Gets a new pixel at the given position with the same style and weight.
+    ///
+    /// Parameters
+    /// ----------
+    /// position : Point or tuple of ints
+    ///     The (x, y) coordinates of the new pixel.
+    ///
+    /// Returns
+    /// -------
+    /// Pixel
+    ///     A new Pixel object at the given position.
+    ///
     fn at(&self, position: Bound<PyAny>) -> PyResult<Self> {
         Ok(Self {
             character: self.character,
@@ -671,9 +876,6 @@ impl Pixel {
     fn __str__(&self) -> PyResult<String> {
         self.render()
     }
-    fn render(&self) -> PyResult<String> {
-        self.style.render(&self.character.to_string())
-    }
     #[setter]
     fn set_position(&mut self, point: Bound<PyAny>) -> PyResult<()> {
         self.position = Point::extract_bound(&point)?;
@@ -681,6 +883,9 @@ impl Pixel {
     }
 }
 impl Pixel {
+    fn render(&self) -> PyResult<String> {
+        self.style.render(&self.character.to_string())
+    }
     fn with_weight(&self, weight: Option<usize>) -> Self {
         let mut new_pixel = self.clone();
         new_pixel.weight = weight;
@@ -688,6 +893,33 @@ impl Pixel {
     }
 }
 
+/// A group of pixels that can be rendered together.
+///
+/// Parameters
+/// ----------
+/// pixels : list of Pixel, optional
+///     A list of Pixel objects to initialize the group.
+/// position : Point or tuple of ints, optional
+///     A position to offset the group of pixels.
+/// style : str, optional
+///     A style to apply to the group of pixels (can overwrite).
+/// weight : int, optional
+///     A weight to apply to the group of pixels (overwrites if None, otherwise adds to existing pixel weight).
+///
+/// Attributes
+/// ----------
+/// pixels : list of Pixel
+///     A list of Pixel objects in the group.
+/// bbox : BoundingBox
+///     The bounding box that encompasses all pixels in the group.
+///
+/// Examples
+/// --------
+/// >>> p1 = Pixel('A', (0,0), "red")
+/// >>> pg = PixelGroup([p1, p1.at((0, 2))])
+/// >>> pg.bbox
+/// BoundingBox(top=2, right=0, bottom=0, left=0)
+///
 #[pyclass(sequence)]
 #[derive(Clone)]
 struct PixelGroup {
@@ -726,6 +958,22 @@ impl PixelGroup {
     fn __setitem__(&mut self, index: usize, value: Pixel) {
         self.pixels[index] = value;
     }
+    #[getter]
+    fn bbox(&self) -> BoundingBox {
+        pixels_to_bounding_box(&self.pixels)
+    }
+    /// Get a new PixelGroup with the same pixels but an updated position.
+    ///
+    /// Parameters
+    /// ----------
+    /// position : Point or tuple of ints
+    ///     The new position of the PixelGroup.
+    ///
+    /// Returns
+    /// -------
+    /// PixelGroup
+    ///     A new PixelGroup with the same pixels but an updated position.
+    ///
     fn at(&self, position: Bound<PyAny>) -> PyResult<Self> {
         Ok(Self {
             pixels: self.pixels.clone(),
@@ -734,6 +982,53 @@ impl PixelGroup {
             weight: self.weight,
         })
     }
+}
+
+/// Generate a PixelGroup from a string.
+///
+/// Parameters
+/// ----------
+/// text : str
+///     The text to convert to a PixelGroup.
+/// position : Point or tuple of ints, optional
+///     A position to offset the text.
+/// style : str, optional
+///     A style to apply to the text.
+/// weight : int, optional
+///     A weight to apply to the text.
+///
+/// Returns
+/// -------
+/// PixelGroup
+///     A PixelGroup object containing the text.
+///
+#[pyfunction(signature = (text, position = None, style = None, *, weight = 0))]
+fn text(
+    text: String,
+    position: Option<Bound<PyAny>>,
+    style: Option<String>,
+    weight: Option<usize>,
+) -> PyResult<PixelGroup> {
+    Ok(PixelGroup {
+        pixels: text
+            .chars()
+            .enumerate()
+            .map(|(i, c)| {
+                Ok(Pixel {
+                    character: c,
+                    position: Point(i as isize, 0),
+                    style: style.clone().unwrap_or_default().parse()?,
+                    weight: weight.clone(),
+                })
+            })
+            .collect::<PyResult<Vec<_>>>()?,
+        position: position
+            .map(|p| Point::extract_bound(&p))
+            .transpose()?
+            .unwrap_or_default(),
+        style: style.unwrap_or_default().parse()?,
+        weight,
+    })
 }
 
 fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<Point, Pixel>> {
@@ -829,6 +1124,32 @@ fn pixels_to_bounding_box(pixels: &[Pixel]) -> BoundingBox {
     }
 }
 
+/// Renders a list of objects (TextPath, Box, Pixel, or PixelGroup) into a single string.
+///
+/// Parameters
+/// ----------
+/// objects : list
+///     A list of objects to render. Each object must be an instance of TextPath, Box, Pixel, or PixelGroup.
+/// default_style : str, optional
+///     The default style to use for empty spaces.
+///
+/// Returns
+/// -------
+/// str
+///     The rendered string with ANSI escape codes.
+///
+/// Raises
+/// ------
+/// TypeError
+///     If an object in the list is not a TextPath, Box, Pixel, or PixelGroup.
+///
+/// Examples
+/// --------
+/// >>> from textdraw import render, text, Style
+/// >>> text = text("Hello", (0,0), "green")
+/// >>> render([text])
+/// '\x1b[32mHello\x1b[39m'
+///
 #[pyfunction(signature = (*args))]
 fn render(args: &Bound<'_, PyTuple>) -> PyResult<String> {
     let map = objs_to_map(args)?;
@@ -1001,8 +1322,41 @@ impl ArrowType {
     }
 }
 
+/// Parses a string to generate an arrow-like character
+///
+/// This is intended to be used with the Pixel class to render a
+/// styled arrow. Eventually the TextPath class will support arrow
+/// endings in a more convenient manner, but for now, they must be
+/// placed manually.
+///
+/// The arrow format is a direction ('up', 'right', 'down', or 'left')
+/// followed by an arrow type ('arrow', 'openarrow', or 'custom[<chars>]'),
+/// where the first of these lists will be used if either part is ommitted.
+///
+/// Custom characters can be used by specifying them inside the 'custom[<chars>]'
+/// brackets, so 'custom[urdl]' would give unique letters for each direction and
+/// 'custom[X]' would use 'X' for every direction. Right now, this is not very
+/// useful, but it is the format which will be used in the TextPath class in a
+/// future update.
+///
+/// Parameters
+/// ----------
+/// fmt : str
+///     The arrow format string.
+///
+/// Returns
+/// -------
+/// str
+///     The parsed arrow character.
+///
+/// Examples
+/// --------
+/// >>> from textdraw import arrow
+/// >>> print(arrow("up arrow"))
+/// '▲'
+///
 #[pyfunction]
-fn arrow(s: &str) -> PyResult<String> {
+fn arrow(fmt: &str) -> PyResult<String> {
     let all_arrow_types = ["openarrow", "arrow", "custom"];
     let arrow_types_re = all_arrow_types.join("|");
     let re = Regex::new(&format!(
@@ -1010,7 +1364,7 @@ fn arrow(s: &str) -> PyResult<String> {
 )).unwrap();
     let mut direction = Direction::default();
     let mut arrow = ArrowType::default();
-    if let Some(captures) = re.captures(s.to_lowercase().trim()) {
+    if let Some(captures) = re.captures(fmt.to_lowercase().trim()) {
         if let Some(matched_direction) = captures.name("direction") {
             match matched_direction.as_str() {
                 "up" => direction = Direction::Up,
@@ -1069,6 +1423,66 @@ impl PartialOrd for State {
     }
 }
 
+/// A set of pixels which represent a path between two points.
+///
+/// Parameters
+/// ----------
+/// start : Point or tuple of ints
+///     The starting point of the path.
+/// end : Point or tuple of ints
+///     The ending point of the path.
+/// style : str, optional
+///     The style to apply to the path.
+/// line_style : {'regular', 'thick', 'double'}, optional
+///     The set of characters to use for the path.
+/// weight : int, optional
+///     The weights to apply to each pixel in the path.
+/// start_direction : {'up', 'right', 'down', 'left'}, optional
+///     The direction to use for the start pixel.
+/// end_direction : {'up', 'right', 'down', 'left'}, optional
+///     The direction to use for the end pixel.
+/// bend_penalty : int, default=1
+///     The penalty weight to apply to bends in the path.
+/// environment : list
+///     A list of objects (TextPath, Box, Pixel, or PixelGroup) which the pathfinding algorithm can
+///     see with their given weights.
+/// barriers : list
+///     A list of objects (TextPath, Box, Pixel, or PixelGroup) which the pathfinding algorithm
+///     considers impassible.
+/// paths : list
+///     A list of objects (TextPath, Box, Pixel, or PixelGroup) which the pathfinding algorithm
+///     will try to follow (these objects have no additional weight cost but also count when
+///     determining neighbors for generating path characters).
+/// bbox : BoundingBox, optional
+///     If provided, limits the search to the bounding box.
+///
+/// Attributes
+/// ----------
+/// style : Style
+///     The style to apply to the path.
+/// line_style : {'regular', 'thick', 'double'}
+///     The set of characters to use for the path.
+/// weight : int or None
+///     The weight to apply to each pixel in the path.
+/// start_direction : {'up', 'right', 'down', 'left'} or None
+///     The direction to use for the start pixel.
+/// end_direction : {'up', 'right', 'down', 'left'} or None
+///     The direction to use for the end pixel.
+///
+/// Examples
+/// --------
+/// >>> from textdraw import TextPath, render
+/// >>> p = TextPath((0, 0), (3, 5))
+/// >>> print(render(p))
+/// ┌──╴
+/// │
+/// │
+/// │
+/// │
+/// ╵
+///
+///
+
 #[pyclass]
 #[derive(Clone)]
 struct TextPath {
@@ -1102,7 +1516,7 @@ impl TextPath {
         environment: Option<Bound<'_, PyAny>>,
         barriers: Option<Bound<'_, PyAny>>,
         paths: Option<Bound<'_, PyAny>>,
-        bbox: Option<BoundingBox>,
+        bbox: Option<Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let start = Point::extract_bound(&start)?;
         let end = Point::extract_bound(&end)?;
@@ -1117,7 +1531,24 @@ impl TextPath {
         for (position, pixel) in &paths {
             environment.insert(*position, pixel.with_weight(Some(0)));
         }
-        let mut bb = bbox.unwrap_or(map_to_bounding_box(&environment));
+        let mut bb = bbox
+            .map(|bb| {
+                if let Ok(boundingbox) = bb.extract::<BoundingBox>() {
+                    Ok(boundingbox)
+                } else if let Ok(tuple_bbox) = bb.extract::<(isize, isize, isize, isize)>() {
+                    Ok(BoundingBox::new(
+                        tuple_bbox.0,
+                        tuple_bbox.1,
+                        tuple_bbox.2,
+                        tuple_bbox.3,
+                    ))
+                } else {
+                    return Err(PyValueError::new_err(
+                        "bbox must be a BoundingBox or a tuple[int, int, int, int]",
+                    ));
+                }
+            })
+            .unwrap_or(Ok(map_to_bounding_box(&environment)))?;
         bb += start;
         bb += end;
         let mut heap = BinaryHeap::new();
@@ -1327,6 +1758,76 @@ impl Display for Justification {
     }
 }
 
+/// A box which can contain some text in a border.
+///
+/// Parameters
+/// ----------
+/// text : str, default=''
+///     The text contained in the box.
+/// position : Point or tuple of ints, optional
+///     The position of the box (bottom-left corner).
+/// width : int, optional
+///     The width of the box (automatically determined by text if None).
+/// height : int, optional
+///     The height of the box (automatically determined by text if None).
+/// style : str, optional
+///     The style to apply to the text.
+/// border_style : str, optional
+///     The style to apply to the border.
+/// line_style : {'regular', 'dashed', 'dotted'}, optional
+///     The set of characters to use for the border.
+/// weight : int, optional
+///     The weight to apply to each pixel in the box.
+/// padding : tuple of ints, default=(0, 1, 0, 1)
+///     The padding applied to each side of the text (top, right, bottom, left).
+/// padding_style : str, optional
+///     The style to apply to the padding.
+/// align : {'top', 'center', 'bottom'}
+///     The alignment of the text in the box.
+/// justify : {'left', 'center', 'right'}
+///     The justification of the text in the box.
+/// truncate_string : str, optional
+///     String to use if text is truncated.
+/// transparent : bool, default=False
+///     If True, the space inside the bounding box of the text will be transparent.
+/// transparent_padding : bool, default=False
+///     If True, the padding space will be transparent.
+///
+/// Attributes
+/// ----------
+/// text : str
+///     The text contained in the box.
+/// position : Point or None
+///     The position of the box (bottom-left corner).
+/// width : int or None
+///     The width of the box (automatically determined by text if None).
+/// height : int or None
+///     The height of the box (automatically determined by text if None).
+/// style : str or None
+///     The style to apply to the text.
+/// border_style : str or None
+///     The style to apply to the border.
+/// line_style : {'regular', 'dashed', 'dotted'} or None
+///     The set of characters to use for the border.
+/// weight : int or None
+///     The weight to apply to each pixel in the box.
+/// padding : tuple of ints
+///     The padding applied to each side of the text (top, right, bottom, left).
+/// padding_style : str or None
+///     The style to apply to the padding.
+/// align : {'top', 'center', 'bottom'}
+///     The alignment of the text in the box.
+/// justify : {'left', 'center', 'right'}
+///     The justification of the text in the box.
+/// truncate_string : str or None
+///     String to use if text is truncated.
+/// transparent : bool
+///     If True, the space inside the bounding box of the text will be transparent.
+/// transparent_padding : bool
+///     If True, the padding space will be transparent.
+/// bbox : BoundingBox
+///     The bounding box of the box itself.
+///
 #[pyclass]
 #[derive(Clone)]
 struct Box {
@@ -1357,12 +1858,11 @@ struct Box {
     transparent: bool,
     #[pyo3(get, set)]
     transparent_padding: bool,
-    bbox: BoundingBox,
 }
 #[pymethods]
 impl Box {
     #[new]
-    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = (0, 1, 0, 1), padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
+    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, *, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = (0, 1, 0, 1), padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
     fn new(
         text: &str,
         position: Option<Bound<PyAny>>,
@@ -1380,6 +1880,26 @@ impl Box {
         transparent: bool,
         transparent_padding: bool,
     ) -> PyResult<Self> {
+        let pad = padding.unwrap_or_default();
+        if let Some(w) = width {
+            let min_width = pad.1 + pad.3 + 2;
+            if w < min_width {
+                return Err(PyValueError::new_err(format!(
+                    "Width {} is too small. Minimum width with current padding is {}",
+                    w, min_width
+                )));
+            }
+        }
+
+        if let Some(h) = height {
+            let min_height = pad.0 + pad.2 + 2;
+            if h < min_height {
+                return Err(PyValueError::new_err(format!(
+                    "Height {} is too small. Minimum height with current padding is {}",
+                    h, min_height
+                )));
+            }
+        }
         Ok(Self {
             text: text.to_string(),
             position: position
@@ -1399,7 +1919,6 @@ impl Box {
             truncate_string,
             transparent,
             transparent_padding,
-            bbox: BoundingBox::default(),
         })
     }
     #[getter]
@@ -1431,13 +1950,25 @@ impl Box {
     }
     #[getter]
     fn get_bbox(&self) -> BoundingBox {
-        let (_, bb_text) = self.format_text();
         let padding = self.padding.unwrap_or_default();
+        let (total_width, total_height) = if let (Some(w), Some(h)) = (self.width, self.height) {
+            (w, h)
+        } else {
+            let (_, bb_text) = self.format_text();
+            let width = self
+                .width
+                .unwrap_or_else(|| bb_text.width() as usize + padding.1 + padding.3 + 2);
+            let height = self
+                .height
+                .unwrap_or_else(|| bb_text.height() as usize + padding.0 + padding.2 + 2);
+            (width, height)
+        };
+
         BoundingBox::new(
-            bb_text.top + padding.0 as isize + 1,
-            bb_text.right + padding.1 as isize + 1,
-            bb_text.bottom - padding.2 as isize - 1,
-            bb_text.left - padding.3 as isize - 1,
+            self.position.1 + total_height as isize - 1,
+            self.position.0 + total_width as isize - 1,
+            self.position.1,
+            self.position.0,
         )
     }
 }
@@ -1445,11 +1976,23 @@ impl Box {
     fn as_group(&self) -> PixelGroup {
         let (text_pixels, bb_text) = self.format_text();
         let padding = self.padding.unwrap_or_default();
+        let (total_width, total_height) = if let (Some(w), Some(h)) = (self.width, self.height) {
+            (w, h)
+        } else {
+            let width = self
+                .width
+                .unwrap_or_else(|| bb_text.width() as usize + padding.1 + padding.3 + 2);
+            let height = self
+                .height
+                .unwrap_or_else(|| bb_text.height() as usize + padding.0 + padding.2 + 2);
+            (width, height)
+        };
+
         let bb_border = BoundingBox::new(
-            bb_text.top + padding.0 as isize + 1,
-            bb_text.right + padding.1 as isize + 1,
-            bb_text.bottom - padding.2 as isize - 1,
-            bb_text.left - padding.3 as isize - 1,
+            self.position.1 + total_height as isize - 1,
+            self.position.0 + total_width as isize - 1,
+            self.position.1,
+            self.position.0,
         );
         let mut pixels: HashMap<Point, Pixel> = bb_border.as_map(
             &self.border_style,
@@ -1468,63 +2011,58 @@ impl Box {
     }
     fn format_text(&self) -> (HashMap<Point, Pixel>, BoundingBox) {
         let trunc = self.truncate_string.clone().unwrap_or("".to_string());
+        let mut raw_lines = Vec::new();
+        let padding = self.padding.unwrap_or_default();
 
-        // Step 1: Break input into lines and wrap each line individually
-        let mut raw_lines = Vec::new(); // MODIFIED: single flat vector
+        let content_width = if let Some(total_width) = self.width {
+            total_width.saturating_sub(2 + padding.3 + padding.1)
+        } else {
+            self.text.lines().map(|line| line.len()).max().unwrap_or(0)
+        };
 
         for line in self.text.lines() {
-            if let Some(w) = self.width {
-                let mut current = String::new();
-                for word in line.split_whitespace() {
-                    if current.len() + word.len() + if current.is_empty() { 0 } else { 1 } > w {
-                        if !current.is_empty() {
-                            raw_lines.push(current.clone()); // MODIFIED: avoid blank segments
-                            current.clear();
-                        }
-                        current.push_str(word);
+            if content_width > 0 {
+                let mut processed_line = line.to_string();
+
+                if processed_line.len() > content_width {
+                    if !trunc.is_empty() && trunc.len() <= content_width {
+                        processed_line.truncate(content_width - trunc.len());
+                        processed_line.push_str(&trunc);
+                    } else if !trunc.is_empty() && trunc.len() > content_width {
+                        processed_line.clear();
                     } else {
-                        if !current.is_empty() {
-                            current.push(' ');
-                        }
-                        current.push_str(word);
+                        processed_line.truncate(content_width);
                     }
                 }
-                if !current.is_empty() || line.trim().is_empty() {
-                    raw_lines.push(current); // MODIFIED: push empty lines too if explicitly in input
-                }
+
+                raw_lines.push(processed_line);
             } else {
-                raw_lines.push(line.to_string());
-            }
-        }
-        // Step 2: Determine effective width and apply horizontal truncation
-        let effective_width = self
-            .width
-            .unwrap_or_else(|| raw_lines.iter().map(|l| l.len()).max().unwrap_or(0));
-        for line in raw_lines.iter_mut() {
-            if line.len() > effective_width {
-                if !trunc.is_empty() && trunc.len() <= effective_width {
-                    line.truncate(effective_width - trunc.len());
-                    line.push_str(&trunc);
-                } else {
-                    line.truncate(effective_width);
-                }
+                raw_lines.push(String::new());
             }
         }
 
-        // Step 3: Determine height and apply vertical truncation
-        let default_height = raw_lines.len().max(1);
-        let effective_height = self.height.unwrap_or(default_height);
+        let effective_width = if self.width.is_some() {
+            content_width
+        } else {
+            raw_lines.iter().map(|l| l.len()).max().unwrap_or(0)
+        };
+
+        let effective_height = if let Some(total_height) = self.height {
+            total_height.saturating_sub(2 + padding.0 + padding.2)
+        } else {
+            raw_lines.len().max(1)
+        };
+
         if raw_lines.len() > effective_height {
             raw_lines.truncate(effective_height);
         }
 
-        // Step 4: Pad each line horizontally based on justification
         let pad_line = |line: &str| -> Vec<Option<String>> {
-            let padding = effective_width.saturating_sub(line.len());
+            let padding_chars = effective_width.saturating_sub(line.len());
             let (left_pad, right_pad) = match self.justify {
-                Justification::Left => (0, padding),
-                Justification::Right => (padding, 0),
-                Justification::Center => (padding / 2, padding - padding / 2),
+                Justification::Left => (0, padding_chars),
+                Justification::Right => (padding_chars, 0),
+                Justification::Center => (padding_chars / 2, padding_chars - padding_chars / 2),
             };
             let mut row = vec![None; left_pad];
             row.extend(line.chars().map(|c| Some(c.to_string())));
@@ -1535,7 +2073,6 @@ impl Box {
         let padded_lines: Vec<Vec<Option<String>>> =
             raw_lines.iter().map(|l| pad_line(l)).collect();
 
-        // Step 5: Add vertical alignment (correct top-to-bottom ordering)
         let blank_row: Vec<Option<String>> = vec![None; effective_width];
         let vertical_padding = effective_height.saturating_sub(padded_lines.len());
         let (top_pad, bottom_pad) = match self.align {
@@ -1552,6 +2089,9 @@ impl Box {
         result.extend(padded_lines.into_iter().rev().collect::<Vec<_>>());
         result.extend(std::iter::repeat_n(blank_row, top_pad));
 
+        let text_start_x = self.position.0 + 1 + padding.3 as isize;
+        let text_start_y = self.position.1 + 1 + padding.2 as isize;
+
         (
             result
                 .iter()
@@ -1563,7 +2103,10 @@ impl Box {
                         .filter_map(|(i, c)| match c {
                             Some(chr) => Some(Pixel {
                                 character: chr.chars().collect::<Vec<char>>()[0],
-                                position: self.position + (i as isize, j as isize),
+                                position: Point::new(
+                                    text_start_x + i as isize,
+                                    text_start_y + j as isize,
+                                ),
                                 style: self.style.clone(),
                                 weight: self.weight,
                             }),
@@ -1573,7 +2116,10 @@ impl Box {
                                 } else {
                                     Some(Pixel {
                                         character: ' ',
-                                        position: self.position + (i as isize, j as isize),
+                                        position: Point::new(
+                                            text_start_x + i as isize,
+                                            text_start_y + j as isize,
+                                        ),
                                         style: self.style.clone(),
                                         weight: self.weight,
                                     })
@@ -1585,10 +2131,10 @@ impl Box {
                 .map(|p| (p.position, p))
                 .collect(),
             BoundingBox {
-                top: self.position.1 + effective_height as isize - 1,
-                right: self.position.0 + effective_width as isize - 1,
-                bottom: self.position.1,
-                left: self.position.0,
+                top: text_start_y + effective_height as isize - 1,
+                right: text_start_x + effective_width as isize - 1,
+                bottom: text_start_y,
+                left: text_start_x,
             },
         )
     }
@@ -1602,6 +2148,7 @@ fn textdraw(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Pixel>()?;
     m.add_function(wrap_pyfunction!(render, m)?)?;
     m.add_function(wrap_pyfunction!(arrow, m)?)?;
+    m.add_function(wrap_pyfunction!(text, m)?)?;
     m.add_class::<TextPath>()?;
     m.add_class::<Box>()?;
     m.add_class::<Point>()?;
