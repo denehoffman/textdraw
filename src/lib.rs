@@ -1234,7 +1234,7 @@ enum LineStyle {
 impl LineStyle {
     fn get_char(&self, neighbors: (bool, bool, bool, bool)) -> char {
         let chars: Vec<char> = match self {
-            LineStyle::Regular => " ╴╷┐╶─┌┬╵┘│┤└┴├┼",
+            LineStyle::Regular => " ─│┐──┌┬│┘│┤└┴├┼",
             LineStyle::Thick => " ━┃┓━━┏┳┃┛┃┫┗┻┣╋",
             LineStyle::Double => " ═║╗══╔╦║╝║╣╚╩╠╬",
         }
