@@ -9,6 +9,7 @@ use std::{
 };
 
 use auto_ops::{impl_op_ex, impl_op_ex_commutative};
+use itertools::Itertools;
 use owo_colors::{AnsiColors, Effect, OwoColorize, Style};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
@@ -1031,6 +1032,10 @@ fn text(
     })
 }
 
+fn pixels_to_map(pixels: &[Pixel]) -> HashMap<Point, Pixel> {
+    pixels.iter().map(|p| (p.position, p.clone())).collect()
+}
+
 fn objs_to_map(args: &Bound<'_, PyAny>) -> PyResult<HashMap<Point, Pixel>> {
     let mut map: HashMap<Point, Pixel> = HashMap::new();
     let objs: Vec<Bound<PyAny>> = if let Ok(it) = args.downcast::<PyTuple>() {
@@ -1497,12 +1502,14 @@ struct TextPath {
     start: Point,
     end: Point,
     paths: HashMap<Point, Pixel>,
+    #[pyo3(get)]
+    cost: usize,
 }
 
 #[pymethods]
 impl TextPath {
     #[new]
-    #[pyo3(signature = (start, end, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None,  bbox = None))]
+    #[pyo3(signature = (start, end, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None))]
     fn new(
         py: Python,
         start: Bound<PyAny>,
@@ -1520,18 +1527,10 @@ impl TextPath {
     ) -> PyResult<Self> {
         let start = Point::extract_bound(&start)?;
         let end = Point::extract_bound(&end)?;
-        let mut environment =
-            objs_to_map(&environment.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
-        for (position, pixel) in
-            objs_to_map(&barriers.unwrap_or(PyTuple::empty(py).as_any().clone()))?
-        {
-            environment.insert(position, pixel.with_weight(None));
-        }
+        let environment = objs_to_map(&environment.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
+        let barriers = objs_to_map(&barriers.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
         let paths = objs_to_map(&paths.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
-        for (position, pixel) in &paths {
-            environment.insert(*position, pixel.with_weight(Some(0)));
-        }
-        let mut bb = bbox
+        let bbox = bbox
             .map(|bb| {
                 if let Ok(boundingbox) = bb.extract::<BoundingBox>() {
                     Ok(boundingbox)
@@ -1548,7 +1547,83 @@ impl TextPath {
                     ));
                 }
             })
-            .unwrap_or(Ok(map_to_bounding_box(&environment)))?;
+            .transpose()?;
+        TextPath::calculate_path(
+            start,
+            end,
+            style,
+            line_style,
+            weight,
+            start_direction,
+            end_direction,
+            bend_penalty,
+            &environment,
+            &barriers,
+            &paths,
+            bbox,
+        )
+    }
+    #[getter]
+    fn get_start_direction(&self) -> String {
+        self.start_direction
+            .map_or("None".to_string(), |d| d.to_string())
+    }
+    #[setter]
+    fn set_start_direction(&mut self, start_direction: Option<String>) -> PyResult<()> {
+        self.start_direction = start_direction.map(|s| s.parse()).transpose()?;
+        Ok(())
+    }
+    #[getter]
+    fn get_end_direction(&self) -> String {
+        self.end_direction
+            .map_or("None".to_string(), |d| d.to_string())
+    }
+    #[setter]
+    fn set_end_direction(&mut self, end_direction: Option<String>) -> PyResult<()> {
+        self.end_direction = end_direction.map(|s| s.parse()).transpose()?;
+        Ok(())
+    }
+    #[getter]
+    fn get_line_style(&self) -> String {
+        self.line_style.to_string()
+    }
+    #[setter]
+    fn set_line_style(&mut self, line_style: String) -> PyResult<()> {
+        self.line_style = line_style.parse()?;
+        Ok(())
+    }
+    #[getter]
+    fn get_bbox(&self) -> BoundingBox {
+        let mut bbox = BoundingBox::default();
+        for point in &self.path {
+            bbox += point;
+        }
+        bbox
+    }
+}
+impl TextPath {
+    fn calculate_path(
+        start: Point,
+        end: Point,
+        style: Option<String>,
+        line_style: String,
+        weight: Option<usize>,
+        start_direction: Option<String>,
+        end_direction: Option<String>,
+        bend_penalty: usize,
+        environment: &HashMap<Point, Pixel>,
+        barriers: &HashMap<Point, Pixel>,
+        paths: &HashMap<Point, Pixel>,
+        bbox: Option<BoundingBox>,
+    ) -> PyResult<Self> {
+        let mut environment = environment.clone();
+        for (position, pixel) in barriers {
+            environment.insert(*position, pixel.with_weight(None));
+        }
+        for (position, pixel) in paths {
+            environment.insert(*position, pixel.with_weight(Some(0)));
+        }
+        let mut bb = bbox.unwrap_or(map_to_bounding_box(&environment));
         bb += start;
         bb += end;
         let mut heap = BinaryHeap::new();
@@ -1579,7 +1654,8 @@ impl TextPath {
                     end_direction: end_direction.map(|s| s.parse().unwrap()),
                     start,
                     end,
-                    paths,
+                    paths: paths.clone(),
+                    cost,
                 });
             }
 
@@ -1619,37 +1695,6 @@ impl TextPath {
         }
         Err(PyValueError::new_err("No path found"))
     }
-    #[getter]
-    fn get_start_direction(&self) -> String {
-        self.start_direction
-            .map_or("None".to_string(), |d| d.to_string())
-    }
-    #[setter]
-    fn set_start_direction(&mut self, start_direction: Option<String>) -> PyResult<()> {
-        self.start_direction = start_direction.map(|s| s.parse()).transpose()?;
-        Ok(())
-    }
-    #[getter]
-    fn get_end_direction(&self) -> String {
-        self.end_direction
-            .map_or("None".to_string(), |d| d.to_string())
-    }
-    #[setter]
-    fn set_end_direction(&mut self, end_direction: Option<String>) -> PyResult<()> {
-        self.end_direction = end_direction.map(|s| s.parse()).transpose()?;
-        Ok(())
-    }
-    #[getter]
-    fn get_line_style(&self) -> String {
-        self.line_style.to_string()
-    }
-    #[setter]
-    fn set_line_style(&mut self, line_style: String) -> PyResult<()> {
-        self.line_style = line_style.parse()?;
-        Ok(())
-    }
-}
-impl TextPath {
     fn as_group(&self) -> PyResult<PixelGroup> {
         let mut path_map: HashSet<Point> = self.path.clone().into_iter().collect();
         for (pos, _) in self.paths.iter() {
@@ -1691,6 +1736,159 @@ impl TextPath {
             weight: Some(0),
         })
     }
+}
+
+/// Generate a list of TextPaths between multiple start and end points.
+///
+/// Parameters
+/// ----------
+/// start : list of Point or tuple of ints
+///     The starting point of the path.
+/// end : list of Point or tuple of ints
+///     The ending point of the path.
+/// style : str, optional
+///     The style to apply to the path.
+/// line_style : {'regular', 'thick', 'double'}, optional
+///     The set of characters to use for the path.
+/// weight : int, optional
+///     The weights to apply to each pixel in the path.
+/// start_direction : list of {'up', 'right', 'down', 'left'}, optional
+///     The direction to use for the start pixel.
+/// end_direction : list of {'up', 'right', 'down', 'left'}, optional
+///     The direction to use for the end pixel.
+/// bend_penalty : int, default=1
+///     The penalty weight to apply to bends in the path.
+/// environment : list
+///     A list of objects (TextPath, Box, Pixel, or PixelGroup) which the pathfinding algorithm can
+///     see with their given weights.
+/// barriers : list
+///     A list of objects (TextPath, Box, Pixel, or PixelGroup) which the pathfinding algorithm
+///     considers impassible.
+/// paths : list
+///     A list of objects (TextPath, Box, Pixel, or PixelGroup) which the pathfinding algorithm
+///     will try to follow (these objects have no additional weight cost but also count when
+///     determining neighbors for generating path characters).
+/// bbox : BoundingBox, optional
+///     If provided, limits the search to the bounding box.
+/// optimize : bool, default=False
+///     If True, iterate through all permutations of path orderings to minimize total cost.
+///
+#[pyfunction]
+#[pyo3(signature = (starts, ends, style = None, *, line_style = "regular".to_string(), weight = None, start_directions = None, end_directions = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None, optimize = false))]
+fn multipath(
+    py: Python,
+    starts: Bound<PyAny>,
+    ends: Bound<PyAny>,
+    style: Option<String>,
+    line_style: String,
+    weight: Option<usize>,
+    start_directions: Option<Vec<Option<String>>>,
+    end_directions: Option<Vec<Option<String>>>,
+    bend_penalty: usize,
+    environment: Option<Bound<'_, PyAny>>,
+    barriers: Option<Bound<'_, PyAny>>,
+    paths: Option<Bound<'_, PyAny>>,
+    bbox: Option<Bound<'_, PyAny>>,
+    optimize: bool,
+) -> PyResult<Vec<TextPath>> {
+    let starts: Vec<Point> = starts
+        .downcast::<PyList>()?
+        .iter()
+        .map(|p| Point::extract_bound(&p))
+        .collect::<PyResult<Vec<_>>>()?;
+    let ends: Vec<Point> = ends
+        .downcast::<PyList>()?
+        .iter()
+        .map(|p| Point::extract_bound(&p))
+        .collect::<PyResult<Vec<_>>>()?;
+    if starts.len() != ends.len() {
+        return Err(PyValueError::new_err(
+            "The number of start and end points must be equal",
+        ));
+    }
+    let start_directions = start_directions.unwrap_or(vec![None; starts.len()]);
+    if starts.len() != start_directions.len() {
+        return Err(PyValueError::new_err(
+            "The number of start points and starting directions must be equal",
+        ));
+    }
+    let end_directions = end_directions.unwrap_or(vec![None; ends.len()]);
+    if ends.len() != end_directions.len() {
+        return Err(PyValueError::new_err(
+            "The number of end points and ending directions must be equal",
+        ));
+    }
+    let environment = objs_to_map(&environment.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
+    let barriers = objs_to_map(&barriers.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
+    let paths = objs_to_map(&paths.unwrap_or(PyTuple::empty(py).as_any().clone()))?;
+    let bbox = bbox
+        .map(|bb| {
+            if let Ok(boundingbox) = bb.extract::<BoundingBox>() {
+                Ok(boundingbox)
+            } else if let Ok(tuple_bbox) = bb.extract::<(isize, isize, isize, isize)>() {
+                Ok(BoundingBox::new(
+                    tuple_bbox.0,
+                    tuple_bbox.1,
+                    tuple_bbox.2,
+                    tuple_bbox.3,
+                ))
+            } else {
+                return Err(PyValueError::new_err(
+                    "bbox must be a BoundingBox or a tuple[int, int, int, int]",
+                ));
+            }
+        })
+        .transpose()?;
+    let mut best_paths: Vec<TextPath> = Vec::with_capacity(starts.len());
+    let mut best_cost: usize = usize::MAX;
+    let order: Vec<usize> = (0..starts.len()).collect();
+    let permutations = if optimize {
+        order
+            .iter()
+            .permutations(order.len())
+            .map(|p| p.into_iter().copied().collect())
+            .collect_vec()
+    } else {
+        vec![order]
+    };
+    for permutation in permutations {
+        let mut local_cost = 0;
+        let mut local_paths: Vec<TextPath> = Vec::with_capacity(starts.len());
+        let mut local_groups: Vec<PixelGroup> = Vec::with_capacity(starts.len());
+        for i in permutation {
+            let local_path_map: HashMap<Point, Pixel> = local_groups
+                .iter()
+                .map(|g| pixels_to_map(&g.pixels))
+                .flatten()
+                .collect();
+            let all_paths = local_path_map
+                .into_iter()
+                .chain(paths.clone().into_iter())
+                .collect();
+            let textpath = TextPath::calculate_path(
+                starts[i],
+                ends[i],
+                style.clone(),
+                line_style.clone(),
+                weight,
+                start_directions[i].clone(),
+                end_directions[i].clone(),
+                bend_penalty,
+                &environment,
+                &barriers,
+                &all_paths,
+                bbox,
+            )?;
+            local_cost += textpath.cost;
+            local_groups.push(textpath.as_group()?);
+            local_paths.push(textpath);
+        }
+        if local_cost < best_cost {
+            best_cost = local_cost;
+            best_paths = local_paths;
+        }
+    }
+    Ok(best_paths)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -2149,6 +2347,7 @@ fn textdraw(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(render, m)?)?;
     m.add_function(wrap_pyfunction!(arrow, m)?)?;
     m.add_function(wrap_pyfunction!(text, m)?)?;
+    m.add_function(wrap_pyfunction!(multipath, m)?)?;
     m.add_class::<TextPath>()?;
     m.add_class::<Box>()?;
     m.add_class::<Point>()?;

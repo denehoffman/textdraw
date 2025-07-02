@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 auto_ops = "0.3.0"
 color-art = "0.3.9"
+itertools = "0.14.0"
 owo-colors = { version = "4.2.2", features = ["supports-color", "supports-colors"] }
 pyo3 = "0.25.1"
 regex = "1.11.1"

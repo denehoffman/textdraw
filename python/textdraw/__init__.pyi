@@ -114,6 +114,28 @@ class TextPath:
         paths: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
         bbox: BoundingBox | tuple[int, int, int, int] | None = None,
     ) -> Self: ...
+    @property
+    def cost(self) -> int: ...
+    @property
+    def bbox(self) -> BoundingBox: ...
+
+
+def multipath(
+    starts: Sequence[Point | tuple[int, int]],
+    ends: Sequence[Point | tuple[int, int]],
+    style: str | None = None,
+    *,
+    line_style: Literal['regular', 'double', 'thick'] = 'regular',
+    weight: int | None = None,
+    start_direction: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
+    end_direction: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
+    bend_penalty: int = 1,
+    environment: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
+    barriers: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
+    paths: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
+    bbox: BoundingBox | tuple[int, int, int, int] | None = None,
+    optimize: bool = False,
+) -> list[TextPath]: ...
 
 
 def arrow(fmt: str) -> str: ...
@@ -162,4 +184,16 @@ class Box:
     def bbox(self) -> BoundingBox: ...
 
 
-__all__ = ['BoundingBox', 'Box', 'Pixel', 'PixelGroup', 'Point', 'Style', 'TextPath', 'arrow', 'render', 'text']
+__all__ = [
+    'BoundingBox',
+    'Box',
+    'Pixel',
+    'PixelGroup',
+    'Point',
+    'Style',
+    'TextPath',
+    'arrow',
+    'multipath',
+    'render',
+    'text',
+]
