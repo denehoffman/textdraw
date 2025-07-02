@@ -27,7 +27,7 @@ if __name__ == '__main__':
     a = LetterBox('a', 0, 0)
     b = LetterBox('b', 20, -8)
     c = LetterBox('c', 3, -10)
-    bbox = BoundingBox.wrap(a.box, b.box, c.box)
+    bbox = BoundingBox.wrap([a.box, b.box, c.box])
     bbox.top += 7
     bbox.bottom -= 7
     bbox.left -= 7
@@ -98,9 +98,9 @@ if __name__ == '__main__':
         optimize=True,
     )
     objs = [a.box, b.box, c.box, *paths, *shared_paths]
-    bbox = BoundingBox.wrap(*objs)
+    bbox = BoundingBox.wrap(objs)
     objs_shifted = duplicate_shifted(
         [*objs, a.barriers, b.barriers, c.barriers],
         Point(bbox.width + 3, 0),
     )
-    print(render(*objs, *objs_shifted))
+    print(render([*objs, *objs_shifted]))

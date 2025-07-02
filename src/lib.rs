@@ -353,8 +353,8 @@ impl BoundingBox {
     ///
     /// Parameters
     /// ----------
-    /// *args : tuple
-    ///     A variable number of objects (Points or other BoundingBoxes) to wrap.
+    /// objs : list
+    ///     A list of objects to fill the BoundingBox. Each object must be an instance of TextPath, Box, Pixel, or PixelGroup.
     ///
     /// Returns
     /// -------
@@ -369,9 +369,8 @@ impl BoundingBox {
     /// BoundingBox(top=10, right=10, bottom=0, left=0)
     ///
     #[staticmethod]
-    #[pyo3(signature = (*args))]
-    fn wrap(args: &Bound<'_, PyTuple>) -> PyResult<BoundingBox> {
-        let map = objs_to_map(args)?;
+    fn wrap(objs: Bound<'_, PyAny>) -> PyResult<BoundingBox> {
+        let map = objs_to_map(&objs)?;
         let bbox = map_to_bounding_box(&map);
         Ok(bbox)
     }
@@ -1221,8 +1220,10 @@ fn pixels_to_bounding_box(pixels: &[Pixel]) -> BoundingBox {
 ///
 /// Parameters
 /// ----------
-/// objects : list
+/// objs: list
 ///     A list of objects to render. Each object must be an instance of TextPath, Box, Pixel, or PixelGroup.
+/// default_style: str, optional
+///     A style to apply to empty space.
 ///
 /// Returns
 /// -------
@@ -1241,17 +1242,22 @@ fn pixels_to_bounding_box(pixels: &[Pixel]) -> BoundingBox {
 /// >>> render([text])
 /// '\x1b[32mHello\x1b[39m'
 ///
-#[pyfunction(signature = (*args))]
-fn render(args: &Bound<'_, PyTuple>) -> PyResult<String> {
-    let map = objs_to_map(args)?;
+#[pyfunction(signature = (objs, default_style = None))]
+fn render(objs: Bound<'_, PyAny>, default_style: Option<String>) -> PyResult<String> {
+    let map = objs_to_map(&objs)?;
     let bb = map_to_bounding_box(&map);
+    let empty_style: TextStyle = default_style
+        .map(|s| s.parse())
+        .transpose()?
+        .unwrap_or_default();
+    let empty_space = empty_style.render(" ")?;
     let mut output = String::new();
     for y in (bb.bottom..=bb.top).rev() {
         for x in bb.left..=bb.right {
             if let Some(p) = map.get(&Point(x, y)) {
                 output.push_str(&p.render()?);
             } else {
-                output.push(' ');
+                output.push_str(&empty_space);
             }
         }
         output.push('\n')

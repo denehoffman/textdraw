@@ -14,4 +14,4 @@ if __name__ == '__main__':
         end_direction='right',
         bend_penalty=20,
     )
-    print(render(a, b, start_node, end_node, path))
+    print(render([a, b, start_node, end_node, path]))

@@ -56,7 +56,7 @@ from textdraw import Box, render
 
 
 box = Box('Hello, world', style='italic', border_style='bold blue', line_style='double', padding=(1, 2, 1, 2))
-print(render(box))
+print(render([box]))
 ```
 
 <p align="center">
@@ -86,7 +86,7 @@ path = TextPath(
     end_direction='right',
     bend_penalty=20,
 )
-print(render(a, b, start_node, end_node, path))
+print(render([a, b, start_node, end_node, path]))
 ```
 
 <p align="center">
@@ -132,7 +132,7 @@ for start, end, color in paths:
     path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='heavy')
     objs.append(path)
 
-print(render(*reversed(objs))) # reversed to put boxes on top of paths
+print(render(list(reversed(objs)))) # reversed to put boxes on top of paths
 ```
 
 <p align="center">
@@ -173,7 +173,7 @@ class LetterBox:
 a = LetterBox('a', 0, 0)
 b = LetterBox('b', 20, -8)
 c = LetterBox('c', 3, -10)
-bbox = BoundingBox.wrap(a.box, b.box, c.box)
+bbox = BoundingBox.wrap([a.box, b.box, c.box])
 bbox.top += 7
 bbox.bottom -= 7
 bbox.left -= 7
@@ -244,12 +244,12 @@ shared_paths = multipath(
     optimize=True,
 )
 objs = [a.box, b.box, c.box, *paths, *shared_paths]
-bbox = BoundingBox.wrap(*objs)
+bbox = BoundingBox.wrap(objs)
 objs_shifted = duplicate_shifted(
     [*objs, a.barriers, b.barriers, c.barriers],
     Point(bbox.width + 3, 0),
 )
-print(render(*objs, *objs_shifted))
+print(render([*objs, *objs_shifted]))
 ```
 
 <p align="center">

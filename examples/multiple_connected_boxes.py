@@ -30,4 +30,4 @@ if __name__ == '__main__':
         path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='heavy')
         objs.append(path)
 
-    print(render(*reversed(objs)))
+    print(render(list(reversed(objs))))

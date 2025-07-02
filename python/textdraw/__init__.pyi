@@ -37,7 +37,7 @@ class BoundingBox:
     @property
     def height(self) -> int: ...
     @staticmethod
-    def wrap(*args: PixelGroup | Pixel | TextPath | Box) -> Self: ...
+    def wrap(objs: Sequence[PixelGroup | Pixel | TextPath | Box]) -> Self: ...
     def duplicate_shifted(self, position: Point | tuple[int, int]) -> Self: ...
 
 
@@ -91,7 +91,7 @@ class Style:
     def bg(self) -> str: ...
 
 
-def render(*args: PixelGroup | Pixel | TextPath | Box) -> str: ...
+def render(objs: Sequence[PixelGroup | Pixel | TextPath | Box], default_style: str | None = None) -> str: ...
 def duplicate_shifted(
     objs: Sequence[PixelGroup | Pixel | TextPath | Box], delta: Point | tuple[int, int]
 ) -> list[PixelGroup | Pixel | TextPath | Box]: ...
@@ -138,8 +138,8 @@ def multipath(
     *,
     line_style: Literal['light', 'heavy', 'double'] = 'light',
     weight: int | None = None,
-    start_direction: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
-    end_direction: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
+    start_directions: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
+    end_directions: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
     bend_penalty: int = 1,
     environment: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
     barriers: Sequence[PixelGroup | Pixel | TextPath | Box] | None = None,
