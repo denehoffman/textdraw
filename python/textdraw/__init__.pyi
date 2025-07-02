@@ -100,7 +100,7 @@ def duplicate_shifted(
 class TextPath:
     position: Point
     style: Style
-    line_style: Literal['regular', 'double', 'thick']
+    line_style: Literal['light', 'heavy', 'double']
     weight: int | None
     start_direction: Literal['up', 'right', 'down', 'left'] | None
     end_direction: Literal['up', 'right', 'down', 'left'] | None
@@ -112,7 +112,7 @@ class TextPath:
         position: Point | tuple[int, int] | None = None,
         style: str | None = None,
         *,
-        line_style: Literal['regular', 'double', 'thick'] = 'regular',
+        line_style: Literal['light', 'heavy', 'double'] = 'light',
         weight: int | None = None,
         start_direction: Literal['up', 'right', 'down', 'left'] | None = None,
         end_direction: Literal['up', 'right', 'down', 'left'] | None = None,
@@ -136,7 +136,7 @@ def multipath(
     position: Point | tuple[int, int] | None = None,
     style: str | None = None,
     *,
-    line_style: Literal['regular', 'double', 'thick'] = 'regular',
+    line_style: Literal['light', 'heavy', 'double'] = 'light',
     weight: int | None = None,
     start_direction: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
     end_direction: Sequence[Literal['up', 'right', 'down', 'left'] | None] | None = None,
@@ -162,7 +162,7 @@ class Box:
     height: int
     style: Style
     border_style: Style
-    line_style: Literal['regular', 'double', 'thick'] | None
+    line_style: Literal['light', 'heavy', 'double'] | None
     weight: int | None
     padding: tuple[int, int, int, int] | None
     padding_style: Style
@@ -181,7 +181,7 @@ class Box:
         style: str | None = None,
         *,
         border_style: str | None = None,
-        line_style: Literal['regular', 'double', 'thick'] | None = 'regular',
+        line_style: Literal['light', 'heavy', 'double'] | None = 'light',
         weight: int | None = 1,
         padding: tuple[int, int, int, int] | None = None,
         padding_style: str | None = None,

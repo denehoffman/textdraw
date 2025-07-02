@@ -114,7 +114,7 @@ boxes = {
 objs = []
 coords = {}
 for label, (x, y) in boxes.items():
-    box = Box(label, (x, y), border_style='bold white', style='bold', line_style='thick', padding=(0, 1, 0, 1))
+    box = Box(label, (x, y), border_style='bold white', style='bold', line_style='heavy', padding=(0, 1, 0, 1))
     objs.append(box)
     coords[label] = box.bbox.center
 
@@ -129,7 +129,7 @@ paths = [
 ]
 
 for start, end, color in paths:
-    path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='thick')
+    path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='heavy')
     objs.append(path)
 
 print(render(*reversed(objs))) # reversed to put boxes on top of paths
@@ -236,7 +236,7 @@ shared_paths = multipath(
     [c.c_bottom, b.c_left, a.c_top],
     [a.c_right, c.c_right, b.c_right],
     style='yellow',
-    line_style='thick',
+    line_style='heavy',
     bend_penalty=20,
     environment=paths,
     barriers=all_barriers,

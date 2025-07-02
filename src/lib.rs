@@ -1437,15 +1437,15 @@ impl FromStr for Direction {
 #[derive(Clone, Copy, Default)]
 enum LineStyle {
     #[default]
-    Regular,
-    Thick,
+    Light,
+    Heavy,
     Double,
 }
 impl LineStyle {
     fn get_char(&self, neighbors: (bool, bool, bool, bool)) -> char {
         let chars: Vec<char> = match self {
-            LineStyle::Regular => " ─│┐──┌┬│┘│┤└┴├┼",
-            LineStyle::Thick => " ━┃┓━━┏┳┃┛┃┫┗┻┣╋",
+            LineStyle::Light => " ─│┐──┌┬│┘│┤└┴├┼",
+            LineStyle::Heavy => " ━┃┓━━┏┳┃┛┃┫┗┻┣╋",
             LineStyle::Double => " ═║╗══╔╦║╝║╣╚╩╠╬",
         }
         .to_string()
@@ -1464,8 +1464,8 @@ impl Display for LineStyle {
             f,
             "{}",
             match self {
-                LineStyle::Regular => "regular",
-                LineStyle::Thick => "thick",
+                LineStyle::Light => "light",
+                LineStyle::Heavy => "heavy",
                 LineStyle::Double => "double",
             }
         )
@@ -1476,8 +1476,8 @@ impl FromStr for LineStyle {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "regular" => Ok(LineStyle::Regular),
-            "thick" => Ok(LineStyle::Thick),
+            "light" => Ok(LineStyle::Light),
+            "heavy" => Ok(LineStyle::Heavy),
             "double" => Ok(LineStyle::Double),
             other => Err(PyValueError::new_err(format!(
                 "Invalid line style [{}]",
@@ -1645,7 +1645,7 @@ impl PartialOrd for State {
 ///     The (x, y) coordinates of the new TextPath.
 /// style : str, optional
 ///     The style to apply to the path.
-/// line_style : {'regular', 'thick', 'double'}, optional
+/// line_style : {'light', 'heavy', 'double'}, optional
 ///     The set of characters to use for the path.
 /// weight : int, optional
 ///     The weights to apply to each pixel in the path.
@@ -1672,7 +1672,7 @@ impl PartialOrd for State {
 /// ----------
 /// style : Style
 ///     The style to apply to the path.
-/// line_style : {'regular', 'thick', 'double'}
+/// line_style : {'light', 'heavy', 'double'}
 ///     The set of characters to use for the path.
 /// weight : int or None
 ///     The weight to apply to each pixel in the path.
@@ -1718,7 +1718,7 @@ struct TextPath {
 #[pymethods]
 impl TextPath {
     #[new]
-    #[pyo3(signature = (start, end, position = None, style = None, *, line_style = "regular".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None))]
+    #[pyo3(signature = (start, end, position = None, style = None, *, line_style = "light".to_string(), weight = None, start_direction = None, end_direction = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None))]
     fn new(
         py: Python,
         start: Bound<PyAny>,
@@ -2008,7 +2008,7 @@ impl TextPath {
 ///     The ending point of the path.
 /// style : str, optional
 ///     The style to apply to the path.
-/// line_style : {'regular', 'thick', 'double'}, optional
+/// line_style : {'light', 'heavy', 'double'}, optional
 ///     The set of characters to use for the path.
 /// weight : int, optional
 ///     The weights to apply to each pixel in the path.
@@ -2034,7 +2034,7 @@ impl TextPath {
 ///     If True, iterate through all permutations of path orderings to minimize total cost.
 ///
 #[pyfunction]
-#[pyo3(signature = (starts, ends, position = None, style = None, *, line_style = "regular".to_string(), weight = None, start_directions = None, end_directions = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None, optimize = false))]
+#[pyo3(signature = (starts, ends, position = None, style = None, *, line_style = "light".to_string(), weight = None, start_directions = None, end_directions = None, bend_penalty = 1, environment = None, barriers = None, paths = None, bbox = None, optimize = false))]
 fn multipath(
     py: Python,
     starts: Bound<PyAny>,
@@ -2235,7 +2235,7 @@ impl Display for Justification {
 ///     The style to apply to the text.
 /// border_style : str, optional
 ///     The style to apply to the border.
-/// line_style : {'regular', 'dashed', 'dotted'}, optional
+/// line_style : {'light', 'heavy', 'double'}, optional
 ///     The set of characters to use for the border.
 /// weight : int, optional
 ///     The weight to apply to each pixel in the box.
@@ -2268,7 +2268,7 @@ impl Display for Justification {
 ///     The style to apply to the text.
 /// border_style : str or None
 ///     The style to apply to the border.
-/// line_style : {'regular', 'dashed', 'dotted'} or None
+/// line_style : {'light', 'heavy', 'double'} or None
 ///     The set of characters to use for the border.
 /// weight : int or None
 ///     The weight to apply to each pixel in the box.
@@ -2323,7 +2323,7 @@ struct Box {
 #[pymethods]
 impl Box {
     #[new]
-    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, *, border_style = None, line_style = Some("regular".to_string()), weight = 1, padding = None, padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
+    #[pyo3(signature = (text = "", position = None, width = None, height = None, style = None, *, border_style = None, line_style = Some("light".to_string()), weight = 1, padding = None, padding_style = None, align = "top", justify= "left", truncate_string = None, transparent = false, transparent_padding = false))]
     fn new(
         text: &str,
         position: Option<Bound<PyAny>>,

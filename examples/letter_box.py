@@ -90,7 +90,7 @@ if __name__ == '__main__':
         [c.c_bottom, b.c_left, a.c_top],
         [a.c_right, c.c_right, b.c_right],
         style='yellow',
-        line_style='thick',
+        line_style='heavy',
         bend_penalty=20,
         environment=paths,
         barriers=all_barriers,

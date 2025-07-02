@@ -12,7 +12,7 @@ if __name__ == '__main__':
     objs = []
     coords = {}
     for label, (x, y) in boxes.items():
-        box = Box(label, (x, y), border_style='bold white', style='bold', line_style='thick', padding=(0, 1, 0, 1))
+        box = Box(label, (x, y), border_style='bold white', style='bold', line_style='heavy', padding=(0, 1, 0, 1))
         objs.append(box)
         coords[label] = box.bbox.center
 
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     ]
 
     for start, end, color in paths:
-        path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='thick')
+        path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='heavy')
         objs.append(path)
 
     print(render(*reversed(objs)))
