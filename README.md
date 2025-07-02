@@ -12,8 +12,7 @@
   <img alt="PyPI - Version" src="https://img.shields.io/pypi/v/textdraw?style=for-the-badge&logo=python&logoColor=yellow&labelColor=blue"></a>
 </p>
 
-`textdraw` is a Python library for drawing styled Unicode boxes and diagrams
-using [`rich`](https://github.com/Textualize/rich). Paths between points
+`textdraw` is a Python library for drawing styled Unicode boxes and diagrams. Paths between points
 can be generated via an A* path-finding algorithm, and text objects can be
 composed to create complex layouts.
 
@@ -32,9 +31,7 @@ composed to create complex layouts.
 ## Features
 
 - Unicode box-drawing with `light`, `heavy`, and `double` borders
-- Styled text rendering via `rich`
-- Layout composition using `TextPanel`s
-- Automatic path-finding with bend and group penalties
+- Automatic path-finding powered by Rust backend
 - Flexible padding and justification for text boxes
 - Support for cleanly merging path intersections
 
@@ -55,18 +52,11 @@ uv pip install textdraw
 ### Boxed Hello World
 
 ```python
-from textdraw import TextBox, BorderType
-from rich import print
+from textdraw import Box, render
 
-box = TextBox.from_string(
-    "Hello, world!",
-    border_type=BorderType.DOUBLE,
-    border_style="bold blue",
-    style="italic",
-    padding=(1, 2, 1, 2),
-)
 
-print(box)
+box = Box('Hello, world', style='italic', border_style='bold blue', line_style='double', padding=(1, 2, 1, 2))
+print(render(box))
 ```
 
 <p align="center">
@@ -80,30 +70,23 @@ print(box)
 ### Connecting boxes
 
 ```python
-from textdraw import TextPanel, TextBox, BorderType
-from rich import print
+from textdraw import Box, Pixel, TextPath, render, Point
 
-panel = TextPanel()
 
-a = TextBox.from_string("A", border_style="green")
-panel.add_object(a, 0, 0)
-b = TextBox.from_string("B", border_style="red")
-panel.add_object(b, 20, 10)
-
-# Automatically route a connecting line
-path = panel.connect(
-    (a.width, a.height - 1),
-    (19, 10),
-    border_type=BorderType.LIGHT,
-    style="dim",
-    start_char="",
-    start_style="red",
-    end_char="◼",
-    end_style="green",
+a = Box('A', (-20, 10), border_style='green', padding=(0, 1, 0, 1))
+b = Box('B', (0, 0), border_style='red', padding=(0, 1, 0, 1))
+print(a.bbox)
+start_node = Pixel('', a.bbox.bottom_right + Point(1, 0), style='red')
+end_node = Pixel('◼', b.bbox.top_left - Point(1, 0), style='green')
+path = TextPath(
+    a.bbox.bottom_right + Point(1, -1),
+    b.bbox.top_left - Point(2, 0),
+    style='dimmed',
+    start_direction='up',
+    end_direction='right',
+    bend_penalty=20,
 )
-panel.add_object(path, 0, 0)
-
-print(panel)
+print(render(a, b, start_node, end_node, path))
 ```
 
 <p align="center">
@@ -117,65 +100,39 @@ print(panel)
 ### Multiple connected boxes
 
 ```python
-from textdraw import TextPanel, TextBox, BorderType
-from rich import print
+from textdraw import Box, TextPath, render
 
-panel = TextPanel()
 
 boxes = {
-    "A": (0, 0),
-    "B": (30, 0),
-    "C": (0, 8),
-    "D": (30, 8),
-    "E": (15, 4),
-    "F": (15, 12),
+    'A': (0, 0),
+    'B': (30, 0),
+    'C': (0, -8),
+    'D': (30, -8),
+    'E': (15, -4),
+    'F': (15, -12),
 }
-
+objs = []
 coords = {}
 for label, (x, y) in boxes.items():
-    box = TextBox.from_string(
-        label,
-        border_type=BorderType.HEAVY,
-        border_style="bold white",
-        style="bold",
-        padding=(0, 1, 0, 1),
-    )
-    panel.add_object(box, x, y)
-    coords[label] = (x + box.width // 2, y + box.height // 2)
+    box = Box(label, (x, y), border_style='bold white', style='bold', line_style='thick', padding=(0, 1, 0, 1))
+    objs.append(box)
+    coords[label] = box.bbox.center
 
 paths = [
-    ("A", "B", "red"),
-    ("A", "C", "green"),
-    ("B", "D", "blue"),
-    ("C", "D", "magenta"),
-    ("A", "E", "yellow"),
-    ("F", "E", "cyan"),
-    ("E", "D", "bright_blue"),
+    ('A', 'B', 'red'),
+    ('A', 'C', 'green'),
+    ('B', 'D', 'blue'),
+    ('C', 'D', 'magenta'),
+    ('A', 'E', 'yellow'),
+    ('F', 'E', 'cyan'),
+    ('E', 'D', 'bright_blue'),
 ]
 
-new_panel = TextPanel()
 for start, end, color in paths:
-    path = panel.connect(
-        coords[start],
-        coords[end],
-        border_type=BorderType.LIGHT,
-        style=color,
-    )
-    panel.add_object(path, 0, 0)
-    new_panel.add_object(path, 0, 0)
+    path = TextPath(coords[start], coords[end], style=color, bend_penalty=0, line_style='thick')
+    objs.append(path)
 
-# We use the new panel to draw the boxes over the paths
-for label, (x, y) in boxes.items():
-    box = TextBox.from_string(
-        label,
-        border_type=BorderType.HEAVY,
-        border_style="bold white",
-        style="bold",
-        padding=(0, 1, 0, 1),
-    )
-    new_panel.add_object(box, x, y)
-
-print(new_panel)
+print(render(*reversed(objs))) # reversed to put boxes on top of paths
 ```
 
 <p align="center">
@@ -189,101 +146,116 @@ print(new_panel)
 ### A Complex Example
 
 ```python
-from typing import override
-from textdraw import (
-    AbstractTextObject,
-    BorderType,
-    StyledChar,
-    TextObject,
-    TextPanel,
-    TextBox,
-)
-from rich import print
+from textdraw import BoundingBox, Box, Pixel, PixelGroup, Point, TextPath, duplicate_shifted, multipath, render
 
 
-class LetterBox(TextObject):
+class LetterBox:
     def __init__(self, letter: str, x: int, y: int):
-        super().__init__(penalty_group="letterbox")
-        self.box = TextBox.from_string(letter)
-        self.x = x
-        self.y = y
-        self.c_left = (x - 1, y + self.box.height // 2)
-        self.c_right = (x + self.box.width, y + self.box.height // 2)
-        self.c_top = (x + self.box.width // 2, y - 1)
-        self.c_bottom = (x + self.box.width // 2, y + self.box.height)
+        self.box = Box(letter, (x, y), padding=(0, 1, 0, 1))
+        self.c_right = self.box.bbox.center_right + Point(1, 0)
+        self.c_left = self.box.bbox.center_left - Point(1, 0)
+        self.c_top = self.box.bbox.top_center + Point(0, 1)
+        self.c_bottom = self.box.bbox.bottom_center - Point(0, 1)
+        barrier = Pixel('⎚', style='blinkfast red', weight=None)
+        self.barriers = PixelGroup(
+            [
+                barrier.duplicate(self.c_left - Point(0, 1)),
+                barrier.duplicate(self.c_left + Point(0, 1)),
+                barrier.duplicate(self.c_right - Point(0, 1)),
+                barrier.duplicate(self.c_right + Point(0, 1)),
+                barrier.duplicate(self.c_bottom - Point(1, 0)),
+                barrier.duplicate(self.c_bottom + Point(1, 0)),
+                barrier.duplicate(self.c_top - Point(1, 0)),
+                barrier.duplicate(self.c_top + Point(1, 0)),
+            ]
+        )
 
-    @property
-    @override
-    def chars(self) -> list[StyledChar]:
-        panel = TextPanel([(self.box, self.x, self.y)])
-        barrier = TextObject.from_string(" ")
-        panel.add_object(barrier, self.c_left[0], self.c_left[1] - 1)
-        panel.add_object(barrier, self.c_left[0], self.c_left[1] + 1)
-        panel.add_object(barrier, self.c_right[0], self.c_right[1] - 1)
-        panel.add_object(barrier, self.c_right[0], self.c_right[1] + 1)
-        panel.add_object(barrier, self.c_top[0] - 1, self.c_top[1])
-        panel.add_object(barrier, self.c_top[0] + 1, self.c_top[1])
-        panel.add_object(barrier, self.c_bottom[0] - 1, self.c_bottom[1])
-        panel.add_object(barrier, self.c_bottom[0] + 1, self.c_bottom[1])
-        return panel.chars
+a = LetterBox('a', 0, 0)
+b = LetterBox('b', 20, -8)
+c = LetterBox('c', 3, -10)
+bbox = BoundingBox.wrap(a.box, b.box, c.box)
+bbox.top += 7
+bbox.bottom -= 7
+bbox.left -= 7
+bbox.right += 7
 
-
-a = LetterBox("a", 0, 0)
-b = LetterBox("b", 20, 8)
-c = LetterBox("c", 3, 10)
-
-panel = TextPanel([a, b, c])
-group_penalties = {"letterbox": 100, "line": 10}
-panel.add_object(
-    panel.connect(
+all_barriers = [a.barriers, b.barriers, c.barriers, a.box, b.box, c.box]
+paths = []
+paths.append(
+    TextPath(
         a.c_right,
         b.c_top,
-        style="dim",
-        group_penalties=group_penalties,
-    ).with_penalty_group("line"),
+        style='dimmed',
+        weight=20,
+        bend_penalty=20,
+        environment=paths,
+        barriers=all_barriers,
+        bbox=bbox,
+    )
 )
-panel.add_object(
-    panel.connect(
+paths.append(
+    TextPath(
         a.c_bottom,
         b.c_left,
-        style="green",
-        group_penalties=group_penalties,
-    ).with_penalty_group("line"),
+        style='green',
+        weight=20,
+        bend_penalty=20,
+        environment=paths,
+        barriers=all_barriers,
+        bbox=bbox,
+    )
 )
-panel.add_object(
-    panel.connect(
+
+paths.append(
+    TextPath(
         a.c_left,
         c.c_top,
-        style="blue",
-        group_penalties=group_penalties,
-    ).with_penalty_group("line"),
+        style='blue',
+        weight=20,
+        bend_penalty=20,
+        environment=paths,
+        barriers=all_barriers,
+        bbox=bbox,
+    )
 )
-panel.add_object(
-    panel.connect(
+
+paths.append(
+    TextPath(
         b.c_bottom,
         c.c_left,
-        style="red",
-        border_type=BorderType.DOUBLE,
-        group_penalties=group_penalties,
-    ).with_penalty_group("line"),
+        style='red',
+        line_style='double',
+        weight=20,
+        bend_penalty=20,
+        environment=paths,
+        barriers=all_barriers,
+        bbox=bbox,
+    )
 )
-panel.add_object(
-    panel.connect_many(
-        [c.c_bottom, b.c_left, a.c_top],
-        [a.c_right, c.c_right, b.c_right],
-        style="yellow",
-        border_type=BorderType.HEAVY,
-        start_char="",
-        group_penalties=group_penalties,
-    ).with_penalty_group("line"),
+shared_paths = multipath(
+    [c.c_bottom, b.c_left, a.c_top],
+    [a.c_right, c.c_right, b.c_right],
+    style='yellow',
+    line_style='thick',
+    bend_penalty=20,
+    environment=paths,
+    barriers=all_barriers,
+    bbox=bbox,
+    optimize=True,
 )
-print(panel)
+objs = [a.box, b.box, c.box, *paths, *shared_paths]
+bbox = BoundingBox.wrap(*objs)
+objs_shifted = duplicate_shifted(
+    [*objs, a.barriers, b.barriers, c.barriers],
+    Point(bbox.width + 3, 0),
+)
+print(render(*objs, *objs_shifted))
 ```
 
 <p align="center">
   <img
     width="300"
-    src="media/letterbox.png"
+    src="media/letter-box.png"
     alt="letterbox result"
   />
 </p>
@@ -293,17 +265,10 @@ print(panel)
 This project was mostly a tool I wanted to create for a graph-drawing project.
 However, there are some features that would be beneficial:
 
-- The ability to move objects around inside a `TextPanel`
-- A way to force the final direction of a path to bend in a certain way (right
-  now, Unicode characters like `┌` cannot be inserted as the last character of
-  a path unless they are added so manually)
-- A simpler interface to add obstacles and intermediate points into the
-  path-finding algorithm
-- Proper calculation of the distance metric for diagonal paths (right now a
-  diagonal path is an L-shape which takes three characters when the distance
-  cost should evaluate to `sqrt(2)`)
 - Combination characters like `╤` to combine different path styles or connect
   paths with boxes directly (the latter can be done but only manually)
+- A convention to use for placing arrowheads at the ends of `TextPath`s.
+  Currently, this can be done manually with `Pixel`s and the `arrow` function.
 
 ## Contributing
 

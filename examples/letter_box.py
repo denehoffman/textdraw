@@ -1,24 +1,24 @@
-from textdraw import BoundingBox, Box, Pixel, PixelGroup, Point, TextPath, multipath, render
+from textdraw import BoundingBox, Box, Pixel, PixelGroup, Point, TextPath, duplicate_shifted, multipath, render
 
 
 class LetterBox:
     def __init__(self, letter: str, x: int, y: int):
-        self.box = Box(letter, (x, y), width=5, height=3)
+        self.box = Box(letter, (x, y), padding=(0, 1, 0, 1))
         self.c_right = self.box.bbox.center_right + Point(1, 0)
         self.c_left = self.box.bbox.center_left - Point(1, 0)
         self.c_top = self.box.bbox.top_center + Point(0, 1)
         self.c_bottom = self.box.bbox.bottom_center - Point(0, 1)
-        barrier = Pixel('⎚', style='red', weight=None)
+        barrier = Pixel('⎚', style='blinkfast red', weight=None)
         self.barriers = PixelGroup(
             [
-                barrier.at(self.c_left - Point(0, 1)),
-                barrier.at(self.c_left + Point(0, 1)),
-                barrier.at(self.c_right - Point(0, 1)),
-                barrier.at(self.c_right + Point(0, 1)),
-                barrier.at(self.c_bottom - Point(1, 0)),
-                barrier.at(self.c_bottom + Point(1, 0)),
-                barrier.at(self.c_top - Point(1, 0)),
-                barrier.at(self.c_top + Point(1, 0)),
+                barrier.duplicate(self.c_left - Point(0, 1)),
+                barrier.duplicate(self.c_left + Point(0, 1)),
+                barrier.duplicate(self.c_right - Point(0, 1)),
+                barrier.duplicate(self.c_right + Point(0, 1)),
+                barrier.duplicate(self.c_bottom - Point(1, 0)),
+                barrier.duplicate(self.c_bottom + Point(1, 0)),
+                barrier.duplicate(self.c_top - Point(1, 0)),
+                barrier.duplicate(self.c_top + Point(1, 0)),
             ]
         )
 
@@ -97,42 +97,10 @@ if __name__ == '__main__':
         bbox=bbox,
         optimize=True,
     )
-    # shared_paths = [
-    #     TextPath(
-    #         c.c_bottom,
-    #         a.c_right,
-    #         style='yellow',
-    #         line_style='thick',
-    #         bend_penalty=20,
-    #         environment=paths,
-    #         barriers=all_barriers,
-    #         bbox=bbox,
-    #     )
-    # ]
-    # shared_paths.append(
-    #     TextPath(
-    #         b.c_left,
-    #         c.c_right,
-    #         style='yellow',
-    #         line_style='thick',
-    #         bend_penalty=20,
-    #         paths=shared_paths,
-    #         environment=paths,
-    #         barriers=all_barriers,
-    #         bbox=bbox,
-    #     )
-    # )
-    # shared_paths.append(
-    #     TextPath(
-    #         a.c_top,
-    #         b.c_right,
-    #         style='yellow',
-    #         line_style='thick',
-    #         bend_penalty=20,
-    #         paths=shared_paths,
-    #         environment=paths,
-    #         barriers=all_barriers,
-    #         bbox=bbox,
-    #     )
-    # )
-    print(render(a.box, b.box, c.box, *paths, *shared_paths))
+    objs = [a.box, b.box, c.box, *paths, *shared_paths]
+    bbox = BoundingBox.wrap(*objs)
+    objs_shifted = duplicate_shifted(
+        [*objs, a.barriers, b.barriers, c.barriers],
+        Point(bbox.width + 3, 0),
+    )
+    print(render(*objs, *objs_shifted))
